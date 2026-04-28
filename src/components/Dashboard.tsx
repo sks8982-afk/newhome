@@ -69,7 +69,14 @@ export function Dashboard(): React.ReactElement {
 
   const newItems = useMemo(() => items.filter((i) => i.isNew), [items]);
   const priorityItems = useMemo(() => items.filter((i) => i.isPriority), [items]);
-  const otherItems = useMemo(() => items.filter((i) => !i.isPriority), [items]);
+  const seoulItems = useMemo(
+    () => items.filter((i) => !i.isPriority && i.region.includes('서울')),
+    [items],
+  );
+  const otherItems = useMemo(
+    () => items.filter((i) => !i.isPriority && !i.region.includes('서울')),
+    [items],
+  );
 
   return (
     <div className="space-y-6">
@@ -83,8 +90,9 @@ export function Dashboard(): React.ReactElement {
               {' · '}
               지역 {filter.regions.join(', ') || '전체'}
               {' · '}
-              📱 알림 <span className="font-semibold text-priority-700">{filter.priorityCities.join(', ') || '없음'}</span>
-              <span className="ml-1 text-slate-400">(우선지역만 텔레그램 발송)</span>
+              📱 알림 <span className="font-semibold text-priority-700">⭐{filter.priorityCities.join('·') || '없음'}</span>
+              <span className="mx-1 text-slate-300">/</span>
+              <span className="font-semibold text-blue-700">🏙️ 서울 전체</span>
             </>
           )}
         </div>
@@ -112,7 +120,10 @@ export function Dashboard(): React.ReactElement {
       <Calendar items={items} />
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">⭐ 우선 지역 ({priorityItems.length})</h2>
+        <h2 className="mb-3 text-lg font-semibold">
+          ⭐ 우선 지역 ({priorityItems.length})
+          <span className="ml-2 text-xs font-normal text-slate-400">— 경기 채널 알림 대상</span>
+        </h2>
         {priorityItems.length === 0 ? (
           <p className="rounded-md border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
             우선 지역(수원·화성·오산) 공고가 아직 없습니다.
@@ -127,7 +138,28 @@ export function Dashboard(): React.ReactElement {
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">기타 매칭 공고 ({otherItems.length}) <span className="text-xs font-normal text-slate-400">— 알림 발송 X, 사이트에만 표시</span></h2>
+        <h2 className="mb-3 text-lg font-semibold">
+          🏙️ 서울 지역 ({seoulItems.length})
+          <span className="ml-2 text-xs font-normal text-slate-400">— 서울 채널 알림 대상</span>
+        </h2>
+        {seoulItems.length === 0 ? (
+          <p className="rounded-md border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+            서울 매칭 공고가 아직 없습니다.
+          </p>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2">
+            {seoulItems.map((i) => (
+              <AnnouncementCard key={i.id} item={i} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-lg font-semibold">
+          📋 기타 매칭 공고 ({otherItems.length})
+          <span className="ml-2 text-xs font-normal text-slate-400">— 알림 발송 X, 사이트에만 표시</span>
+        </h2>
         {otherItems.length === 0 ? (
           <p className="rounded-md border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
             매칭되는 공고가 없습니다.
