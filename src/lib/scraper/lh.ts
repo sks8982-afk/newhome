@@ -2,43 +2,69 @@ import * as cheerio from 'cheerio';
 import { createHash } from 'node:crypto';
 import type { Announcement, HousingType } from '@/types/announcement';
 
-const LH_LIST_URL =
-  'https://apply.lh.or.kr/lhapply/apply/wt/wrtanc/selectWrtancList.do';
+const LH_BASE = 'https://apply.lh.or.kr';
+// mi=1026: 임대주택(행복주택 포함) 공고 목록 메뉴
+const LH_LIST_URL = `${LH_BASE}/lhapply/apply/wt/wrtanc/selectWrtancList.do?mi=1026`;
+const LH_MAIN_URL = `${LH_BASE}/lhapply/main.do`;
 
-const HOUSING_TYPE_MAP: Record<string, HousingType> = {
-  '행복주택': '행복주택',
-  '국민임대': '국민임대',
-  '영구임대': '영구임대',
-  '공공임대': '공공임대',
-  '분양': '분양주택',
-  '신혼희망타운': '신혼희망타운',
-};
+const HOUSING_TYPE_KEYWORDS: Array<[string, HousingType]> = [
+  ['행복주택', '행복주택'],
+  ['신혼희망', '신혼희망타운'],
+  ['국민임대', '국민임대'],
+  ['영구임대', '영구임대'],
+  ['공공임대', '공공임대'],
+  ['분양', '분양주택'],
+];
+
+const KOREAN_CITIES = [
+  '수원', '화성', '오산', '용인', '성남', '안양', '부천', '평택',
+  '시흥', '안산', '광명', '의왕', '군포', '하남', '남양주', '구리',
+  '의정부', '고양', '파주', '김포', '이천', '여주', '양주', '동두천',
+  '광주', '안성', '포천',
+];
 
 function sha1(input: string): string {
   return createHash('sha1').update(input).digest('hex').slice(0, 16);
 }
 
-function detectHousingType(title: string): HousingType {
-  for (const [keyword, type] of Object.entries(HOUSING_TYPE_MAP)) {
-    if (title.includes(keyword)) return type;
+function detectHousingType(typeText: string, title: string): HousingType {
+  const haystack = `${typeText} ${title}`;
+  for (const [keyword, type] of HOUSING_TYPE_KEYWORDS) {
+    if (haystack.includes(keyword)) return type;
   }
   return '기타';
 }
 
 function detectCity(text: string): string | undefined {
-  const cities = [
-    '수원', '화성', '오산', '용인', '성남', '안양', '부천', '평택',
-    '시흥', '안산', '광명', '의왕', '군포', '하남', '남양주', '구리',
-    '의정부', '고양', '파주', '김포', '이천', '여주', '양주', '동두천',
-  ];
-  return cities.find((c) => text.includes(c));
+  return KOREAN_CITIES.find((c) => text.includes(c));
+}
+
+function normalizeDate(raw: string): string {
+  // "2026.04.28" -> "2026-04-28"
+  const trimmed = raw.trim().replace(/\s+/g, '');
+  if (/^\d{4}\.\d{2}\.\d{2}$/.test(trimmed)) {
+    return trimmed.replace(/\./g, '-');
+  }
+  return trimmed;
+}
+
+function cleanTitle(raw: string): string {
+  // "1일전" 같은 시간 라벨 제거 + 공백 정규화
+  return raw
+    .replace(/\s+/g, ' ')
+    .replace(/\s*\d+일전\s*$/, '')
+    .replace(/\s*NEW\s*$/i, '')
+    .trim();
 }
 
 interface RawRow {
   noticeNo: string;
+  typeText: string;
   title: string;
   region: string;
   postedAt: string;
+  applyEnd: string;
+  status: string;
   detailUrl: string;
 }
 
@@ -48,116 +74,79 @@ function parseList(html: string): RawRow[] {
 
   $('table tbody tr').each((_, tr) => {
     const tds = $(tr).find('td');
-    if (tds.length < 4) return;
-    const noticeNo = $(tds[0]).text().trim();
-    const titleEl = $(tds[1]).find('a').first();
-    const title = (titleEl.text() || $(tds[1]).text()).trim();
-    const region = $(tds[2]).text().trim();
-    const postedAt = $(tds[tds.length - 1]).text().trim();
-    const href = titleEl.attr('href') ?? '';
-    const detailUrl = href.startsWith('http')
-      ? href
-      : `https://apply.lh.or.kr${href}`;
-    if (!title) return;
-    rows.push({ noticeNo, title, region, postedAt, detailUrl });
+    if (tds.length < 8) return;
+
+    const titleAnchor = $(tds[2]).find('a').first();
+    const noticeNo =
+      titleAnchor.attr('data-id1') ?? $(tds[0]).text().trim();
+    const typeText = $(tds[1]).text().trim();
+    const title = cleanTitle(titleAnchor.text() || $(tds[2]).text());
+    const region = $(tds[3]).text().trim();
+    const postedAt = normalizeDate($(tds[5]).text());
+    const applyEnd = normalizeDate($(tds[6]).text());
+    const status = $(tds[7]).text().trim();
+
+    if (!title || !noticeNo) return;
+
+    rows.push({
+      noticeNo,
+      typeText,
+      title,
+      region,
+      postedAt,
+      applyEnd,
+      status,
+      // 정확한 detail URL 패턴은 알 수 없으므로 list 페이지로 fallback
+      detailUrl: LH_LIST_URL,
+    });
   });
 
   return rows;
 }
 
-function mockRows(): RawRow[] {
-  const today = new Date().toISOString().slice(0, 10);
-  return [
-    {
-      noticeNo: '2026-경기-001',
-      title: '2026년 1차 경기 수원장안 행복주택 예비입주자 모집공고',
-      region: '경기',
-      postedAt: today,
-      detailUrl: LH_LIST_URL,
-    },
-    {
-      noticeNo: '2026-경기-002',
-      title: '2026년 1차 경기 화성동탄 행복주택 예비입주자 모집공고',
-      region: '경기',
-      postedAt: today,
-      detailUrl: LH_LIST_URL,
-    },
-    {
-      noticeNo: '2026-경기-003',
-      title: '2026년 1차 경기 오산세교 행복주택 예비입주자 모집공고',
-      region: '경기',
-      postedAt: today,
-      detailUrl: LH_LIST_URL,
-    },
-    {
-      noticeNo: '2026-경기-004',
-      title: '2026년 1차 경기 고양삼송 행복주택 예비입주자 모집공고',
-      region: '경기',
-      postedAt: today,
-      detailUrl: LH_LIST_URL,
-    },
-    {
-      noticeNo: '2026-서울-001',
-      title: '2026년 1차 서울 강서 국민임대 모집공고',
-      region: '서울',
-      postedAt: today,
-      detailUrl: LH_LIST_URL,
-    },
-  ];
-}
-
 export interface ScrapeOptions {
   housingType?: HousingType;
   region?: string;
-  useMock?: boolean;
 }
 
-export async function scrapeLH(opts: ScrapeOptions = {}): Promise<Announcement[]> {
+export async function scrapeLH(_opts: ScrapeOptions = {}): Promise<Announcement[]> {
   const now = new Date().toISOString();
+
+  const headers: Record<string, string> = {
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    Accept:
+      'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+    Referer: LH_MAIN_URL,
+  };
+
   let rows: RawRow[] = [];
-
-  if (!opts.useMock) {
-    try {
-      const body = new URLSearchParams({
-        panSs: 'A',
-        cnpCdArr: opts.housingType === '행복주택' ? '06' : '',
-        aisTpCdArr: '',
-        ccrCnntSysDsCdArr: '',
-        searchSidoCd: opts.region === '경기' ? '41' : '',
-        searchGugunCd: '',
-        searchKeyword: '',
-        viewPage: '1',
-      });
-
-      const res = await fetch(LH_LIST_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36',
-          Accept: 'text/html,application/xhtml+xml',
-        },
-        body,
-        cache: 'no-store',
-      });
-
-      if (res.ok) {
-        const html = await res.text();
-        rows = parseList(html);
-      }
-    } catch {
-      rows = [];
+  try {
+    const res = await fetch(LH_LIST_URL, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      console.warn('[scrapeLH] non-200:', res.status);
+      return [];
     }
-  }
-
-  if (rows.length === 0) {
-    rows = mockRows();
+    const html = await res.text();
+    if (html.includes('eGovFrame 템플릿') && html.includes('잘못된 경로')) {
+      console.warn('[scrapeLH] LH returned error template (anti-bot block)');
+      return [];
+    }
+    rows = parseList(html);
+  } catch (err: unknown) {
+    console.error('[scrapeLH] fetch failed:', err);
+    return [];
   }
 
   return rows.map((r): Announcement => {
-    const housingType = detectHousingType(r.title);
+    const housingType = detectHousingType(r.typeText, r.title);
     const city = detectCity(`${r.title} ${r.region}`);
-    const id = sha1(`LH:${r.noticeNo}:${r.title}`);
+    const id = sha1(`LH:${r.noticeNo}`);
     return {
       id,
       source: 'LH',
@@ -167,6 +156,7 @@ export async function scrapeLH(opts: ScrapeOptions = {}): Promise<Announcement[]
       region: r.region,
       city,
       postedAt: r.postedAt,
+      applyEnd: r.applyEnd || undefined,
       detailUrl: r.detailUrl,
       isPriority: false,
       isNew: false,
