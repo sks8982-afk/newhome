@@ -19,12 +19,18 @@ export interface NotifyChannel {
 export function getNotifyChannels(): NotifyChannel[] {
   const channels: NotifyChannel[] = [];
 
+  // LH region 표기 정규화: "서울특별시 외" / "경기도 외" 같이 끝에 "외"가
+  // 붙은 것은 전국 단위 공고(다자녀 전세임대 등)이므로 단일 지역 매칭에서 제외.
+  const isPureRegion = (r: string, keyword: string): boolean => {
+    const t = r.trim();
+    return t.includes(keyword) && !t.includes('외');
+  };
+
   if (process.env.TELEGRAM_CHAT_ID) {
     channels.push({
       name: '경기 우선',
       chatId: process.env.TELEGRAM_CHAT_ID,
-      match: (a) =>
-        (a.region.includes('경기') || (a.city ?? '').length > 0) && a.isPriority,
+      match: (a) => isPureRegion(a.region, '경기') && a.isPriority,
     });
   }
 
@@ -32,7 +38,7 @@ export function getNotifyChannels(): NotifyChannel[] {
     channels.push({
       name: '서울 전체',
       chatId: process.env.TELEGRAM_CHAT_ID_SEOUL,
-      match: (a) => a.region.includes('서울'),
+      match: (a) => isPureRegion(a.region, '서울'),
     });
   }
 
