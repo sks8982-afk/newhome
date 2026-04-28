@@ -21,7 +21,7 @@ export function NotificationBanner({ newItems, onDismiss }: Props): React.ReactE
     if (typeof Notification === 'undefined') return;
     if (Notification.permission !== 'granted') return;
     const priority = newItems.find((i) => i.isPriority) ?? newItems[0];
-    new Notification('새로운 행복주택 공고', {
+    new Notification('새 청약 공고', {
       body: priority.title,
       tag: priority.id,
     });

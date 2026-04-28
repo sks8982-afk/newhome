@@ -17,7 +17,7 @@ function renderMessage(items: Announcement[]): string {
   const priority = items.filter((i) => i.isPriority);
   const others = items.filter((i) => !i.isPriority);
   const lines: string[] = [];
-  lines.push(`🏠 *새 행복주택 공고 ${items.length}건*`);
+  lines.push(`🏠 *새 청약 공고 ${items.length}건*`);
   lines.push('');
 
   const renderItem = (a: Announcement): string => {
