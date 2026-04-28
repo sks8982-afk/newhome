@@ -70,6 +70,24 @@ interface RawRow {
   detailUrl: string;
 }
 
+// 공고 상세 URL 패턴 (LH 청약플러스 클라이언트 JS 분석 결과):
+//   data-id1 -> panId          (공고 고유 ID, 16자리 숫자)
+//   data-id2 -> ccrCnntSysDsCd
+//   data-id3 -> uppAisTpCd
+//   data-id4 -> aisTpCd
+function buildDetailUrl(d1: string, d2: string, d3: string, d4: string): string {
+  const params = new URLSearchParams({
+    ccrCnntSysDsCd: d2,
+    panId: d1,
+    aisTpCd: d4,
+    uppAisTpCd: d3,
+    mi: '1026',
+    panKdCd: '',
+    otxtPanId: '',
+  });
+  return `${LH_BASE}/lhapply/apply/wt/wrtanc/selectWrtancInfo.do?${params.toString()}`;
+}
+
 function parseList(html: string): RawRow[] {
   const $ = cheerio.load(html);
   const rows: RawRow[] = [];
@@ -78,9 +96,12 @@ function parseList(html: string): RawRow[] {
     const tds = $(tr).find('td');
     if (tds.length < 8) return;
 
-    const titleAnchor = $(tds[2]).find('a').first();
-    const noticeNo =
-      titleAnchor.attr('data-id1') ?? $(tds[0]).text().trim();
+    const titleAnchor = $(tds[2]).find('a.wrtancInfoBtn').first();
+    const d1 = titleAnchor.attr('data-id1') ?? '';
+    const d2 = titleAnchor.attr('data-id2') ?? '';
+    const d3 = titleAnchor.attr('data-id3') ?? '';
+    const d4 = titleAnchor.attr('data-id4') ?? '';
+    const noticeNo = d1 || $(tds[0]).text().trim();
     const typeText = $(tds[1]).text().trim();
     const title = cleanTitle(titleAnchor.text() || $(tds[2]).text());
     const region = $(tds[3]).text().trim();
@@ -90,6 +111,11 @@ function parseList(html: string): RawRow[] {
 
     if (!title || !noticeNo) return;
 
+    const detailUrl =
+      d1 && d2 && d3 && d4
+        ? buildDetailUrl(d1, d2, d3, d4)
+        : LH_LIST_URL;
+
     rows.push({
       noticeNo,
       typeText,
@@ -98,8 +124,7 @@ function parseList(html: string): RawRow[] {
       postedAt,
       applyEnd,
       status,
-      // 정확한 detail URL 패턴은 알 수 없으므로 list 페이지로 fallback
-      detailUrl: LH_LIST_URL,
+      detailUrl,
     });
   });
 
