@@ -6,6 +6,8 @@ const LH_BASE = 'https://apply.lh.or.kr';
 // mi=1026: 임대주택(행복주택 포함) 공고 목록 메뉴
 const LH_LIST_URL = `${LH_BASE}/lhapply/apply/wt/wrtanc/selectWrtancList.do?mi=1026`;
 const LH_MAIN_URL = `${LH_BASE}/lhapply/main.do`;
+const MAX_PAGES = 5;
+const PAGE_SIZE = 50;
 
 const HOUSING_TYPE_KEYWORDS: Array<[string, HousingType]> = [
   ['행복주택', '행복주택'],
@@ -121,27 +123,48 @@ export async function scrapeLH(_opts: ScrapeOptions = {}): Promise<Announcement[
     Referer: LH_MAIN_URL,
   };
 
-  let rows: RawRow[] = [];
-  try {
-    const res = await fetch(LH_LIST_URL, {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-    });
-    if (!res.ok) {
-      console.warn('[scrapeLH] non-200:', res.status);
-      return [];
+  const seen = new Map<string, RawRow>();
+  let lastFirstNo = '';
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    let pageRows: RawRow[] = [];
+    try {
+      const res = await fetch(`${LH_LIST_URL}&currPage=${page}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        console.warn('[scrapeLH] page', page, 'non-200:', res.status);
+        break;
+      }
+      const html = await res.text();
+      if (html.includes('eGovFrame 템플릿') && html.includes('잘못된 경로')) {
+        console.warn('[scrapeLH] error template (anti-bot block) on page', page);
+        break;
+      }
+      pageRows = parseList(html);
+    } catch (err: unknown) {
+      console.error('[scrapeLH] page', page, 'fetch failed:', err);
+      break;
     }
-    const html = await res.text();
-    if (html.includes('eGovFrame 템플릿') && html.includes('잘못된 경로')) {
-      console.warn('[scrapeLH] LH returned error template (anti-bot block)');
-      return [];
+
+    if (pageRows.length === 0) break;
+
+    // LH returns the last page repeatedly when paging past the end.
+    // Detect by comparing the first row number across pages.
+    const firstNo = pageRows[0]?.noticeNo ?? '';
+    if (page > 1 && firstNo === lastFirstNo) break;
+    lastFirstNo = firstNo;
+
+    for (const r of pageRows) {
+      if (!seen.has(r.noticeNo)) seen.set(r.noticeNo, r);
     }
-    rows = parseList(html);
-  } catch (err: unknown) {
-    console.error('[scrapeLH] fetch failed:', err);
-    return [];
+
+    // Last page is shorter than page size — no more data after.
+    if (pageRows.length < PAGE_SIZE) break;
   }
+
+  const rows = [...seen.values()];
 
   return rows.map((r): Announcement => {
     const housingType = detectHousingType(r.typeText, r.title);
