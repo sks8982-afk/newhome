@@ -10,7 +10,8 @@ export async function POST(): Promise<NextResponse> {
       ok: true,
       total: result.total,
       matched: result.matched,
-      newCount: result.newItems.length,
+      newCount: result.newCount,
+      notified: result.notified,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'unknown error';
