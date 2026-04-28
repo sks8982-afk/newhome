@@ -1,0 +1,54 @@
+// Prisma schema for newhome
+// Uses dedicated `newhome` schema in the shared Postgres database.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["newhome"]
+}
+
+model Announcement {
+  id          String   @id
+  source      String
+  noticeNo    String   @map("notice_no")
+  title       String
+  housingType String   @map("housing_type")
+  region      String
+  city        String?
+  postedAt    String   @map("posted_at")
+  applyStart  String?  @map("apply_start")
+  applyEnd    String?  @map("apply_end")
+  detailUrl   String   @map("detail_url")
+  isPriority  Boolean  @default(false) @map("is_priority")
+  fetchedAt   DateTime @default(now()) @map("fetched_at")
+  notifiedAt  DateTime? @map("notified_at")
+  raw         Json?
+
+  @@index([source, postedAt])
+  @@index([isPriority])
+  @@map("announcements")
+  @@schema("newhome")
+}
+
+model Filter {
+  id              Int      @id @default(1)
+  housingTypes    String[] @map("housing_types")
+  regions         String[]
+  priorityCities  String[] @map("priority_cities")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("filter")
+  @@schema("newhome")
+}
+
+model SeenAnnouncement {
+  announcementId String   @id @map("announcement_id")
+  seenAt         DateTime @default(now()) @map("seen_at")
+
+  @@map("seen_announcements")
+  @@schema("newhome")
+}
