@@ -12,6 +12,7 @@ export async function POST(): Promise<NextResponse> {
       matched: result.matched,
       newCount: result.newCount,
       notified: result.notified,
+      dispatch: result.dispatch,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'unknown error';
