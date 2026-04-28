@@ -9,6 +9,8 @@ export type HousingType =
   | '신혼희망타운'
   | '기타';
 
+export type AnnouncementStatus = '접수중' | '공고중' | '정정공고중' | '마감' | string;
+
 export interface Announcement {
   id: string;
   source: Source;
@@ -20,6 +22,7 @@ export interface Announcement {
   postedAt: string;
   applyStart?: string;
   applyEnd?: string;
+  status?: AnnouncementStatus;
   detailUrl: string;
   isPriority: boolean;
   isNew: boolean;

@@ -23,9 +23,15 @@ function renderMessage(items: Announcement[]): string {
   const renderItem = (a: Announcement): string => {
     const star = a.isPriority ? '⭐ ' : '• ';
     const title = escapeMarkdownV2(a.title);
-    const meta = escapeMarkdownV2(
-      `${a.housingType} · ${a.region}${a.city ? ` · ${a.city}` : ''} · ${a.postedAt || '-'}`,
-    );
+    const metaParts = [
+      a.housingType,
+      a.region,
+      a.city,
+      a.status,
+      `게시 ${a.postedAt || '-'}`,
+      a.applyEnd ? `마감 ${a.applyEnd}` : null,
+    ].filter(Boolean);
+    const meta = escapeMarkdownV2(metaParts.join(' · '));
     const url = a.detailUrl;
     return `${star}[${title}](${url})\n   _${meta}_`;
   };

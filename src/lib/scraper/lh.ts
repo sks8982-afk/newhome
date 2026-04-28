@@ -180,6 +180,7 @@ export async function scrapeLH(_opts: ScrapeOptions = {}): Promise<Announcement[
       city,
       postedAt: r.postedAt,
       applyEnd: r.applyEnd || undefined,
+      status: r.status || undefined,
       detailUrl: r.detailUrl,
       isPriority: false,
       isNew: false,

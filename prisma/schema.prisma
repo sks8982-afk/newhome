@@ -22,6 +22,7 @@ model Announcement {
   postedAt    String   @map("posted_at")
   applyStart  String?  @map("apply_start")
   applyEnd    String?  @map("apply_end")
+  status      String?
   detailUrl   String   @map("detail_url")
   isPriority  Boolean  @default(false) @map("is_priority")
   fetchedAt   DateTime @default(now()) @map("fetched_at")

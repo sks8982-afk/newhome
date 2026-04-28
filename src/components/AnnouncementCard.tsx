@@ -22,6 +22,21 @@ export function AnnouncementCard({ item }: Props): React.ReactElement {
               {item.housingType}
             </span>
             <span className="text-slate-500">{item.region}</span>
+            {item.status && (
+              <span
+                className={`rounded px-2 py-0.5 font-semibold ${
+                  item.status === '접수중'
+                    ? 'bg-rose-100 text-rose-700'
+                    : item.status === '공고중'
+                      ? 'bg-blue-100 text-blue-700'
+                      : item.status === '정정공고중'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {item.status}
+              </span>
+            )}
             {item.isPriority && (
               <span className="rounded-full bg-priority-600 px-2 py-0.5 font-bold text-white">
                 ⭐ 우선
@@ -43,6 +58,7 @@ export function AnnouncementCard({ item }: Props): React.ReactElement {
           </a>
           <p className="mt-1 text-xs text-slate-500">
             공고번호 {item.noticeNo} · 게시 {item.postedAt || '-'}
+            {item.applyEnd && ` · 마감 ${item.applyEnd}`}
           </p>
         </div>
       </div>
