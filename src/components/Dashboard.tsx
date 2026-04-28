@@ -59,13 +59,9 @@ export function Dashboard(): React.ReactElement {
     void load();
   }, [load]);
 
-  // initial scrape if no items
-  useEffect(() => {
-    if (!loading && items.length === 0 && !refreshing && !error) {
-      void refresh();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]);
+  // 페이지 로드 시 LH 자동 호출은 의도적으로 하지 않습니다.
+  // - 데이터는 매일 10시 cron이 채워두므로 DB만 읽으면 충분.
+  // - 새 정보가 필요하면 사용자가 '🔄 지금 새로고침' 버튼을 누르면 됨.
 
   const newItems = useMemo(() => items.filter((i) => i.isNew), [items]);
   const priorityItems = useMemo(() => items.filter((i) => i.isPriority), [items]);
