@@ -48,13 +48,16 @@ function renderMessage(items: Announcement[]): string {
   return lines.join('\n');
 }
 
-export async function sendTelegramNotification(items: Announcement[]): Promise<boolean> {
+export async function sendTelegramNotification(
+  items: Announcement[],
+  overrideChatId?: string,
+): Promise<boolean> {
   if (items.length === 0) return false;
 
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
+  const chatId = overrideChatId ?? process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) {
-    console.warn('[notify] TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing, skipping');
+    console.warn('[notify] TELEGRAM_BOT_TOKEN or chat id missing, skipping');
     return false;
   }
 

@@ -1,16 +1,14 @@
 import type { Announcement } from '@/types/announcement';
 import { scrapeLH } from './lh';
 import {
-  getUnnotifiedNewItems,
   loadAnnouncements,
   loadFilter,
   loadSeenIds,
-  markNotified,
   markSeen,
   upsertAnnouncements,
 } from '@/lib/db/store';
 import { applyPriority, matchesFilter } from '@/lib/filter';
-import { sendTelegramNotification } from '@/lib/notify/telegram';
+import { dispatchToChannels, type DispatchResult } from '@/lib/notify/channels';
 
 export interface ScrapeResult {
   total: number;
@@ -18,16 +16,16 @@ export interface ScrapeResult {
   newCount: number;
   newItems: Announcement[];
   notified: boolean;
+  dispatch: DispatchResult[];
 }
 
-export async function refreshAnnouncements(opts: { notify?: boolean } = {}): Promise<ScrapeResult> {
+export async function refreshAnnouncements(
+  opts: { notify?: boolean } = {},
+): Promise<ScrapeResult> {
   const filter = await loadFilter();
   const seenIds = new Set(await loadSeenIds());
 
-  const lhItems = await scrapeLH({
-    housingType: filter.housingTypes[0],
-    region: filter.regions[0],
-  });
+  const lhItems = await scrapeLH();
 
   const matched = lhItems.filter((a) => matchesFilter(a, filter));
   const prioritized = applyPriority(matched, filter);
@@ -35,22 +33,11 @@ export async function refreshAnnouncements(opts: { notify?: boolean } = {}): Pro
 
   await upsertAnnouncements(tagged);
 
-  const unnotified = await getUnnotifiedNewItems();
-  // Telegram 알림 정책: 우선 도시(priorityCities) 매칭 공고만 발송.
-  // 다른 매칭은 DB/사이트에 저장만 되고 알림은 안 감.
-  const toNotify = unnotified.filter((a) => a.isPriority);
-  let notified = false;
-  if (opts.notify && toNotify.length > 0) {
-    const ok = await sendTelegramNotification(toNotify);
-    if (ok) {
-      await markNotified(toNotify.map((i) => i.id));
-      notified = true;
-    }
-  }
-  // 우선 매칭이 아닌 unnotified도 markNotified 처리해서 재발송 막기 (이미 사이트에선 보임).
-  const skipNotify = unnotified.filter((a) => !a.isPriority).map((i) => i.id);
-  if (skipNotify.length > 0) {
-    await markNotified(skipNotify);
+  let dispatch: DispatchResult[] = [];
+  if (opts.notify) {
+    // Reload from DB so notifiedChannels[] reflects what each row already has.
+    const all = await loadAnnouncements();
+    dispatch = await dispatchToChannels(all);
   }
 
   return {
@@ -58,7 +45,8 @@ export async function refreshAnnouncements(opts: { notify?: boolean } = {}): Pro
     matched: matched.length,
     newCount: tagged.filter((a) => a.isNew).length,
     newItems: tagged.filter((a) => a.isNew),
-    notified,
+    notified: dispatch.some((d) => d.sent > 0),
+    dispatch,
   };
 }
 

@@ -27,6 +27,7 @@ export async function loadAnnouncements(): Promise<Announcement[]> {
     isPriority: r.isPriority,
     isNew: !seen.has(r.id),
     fetchedAt: r.fetchedAt.toISOString(),
+    notifiedChannels: r.notifiedChannels ?? [],
   }));
 }
 

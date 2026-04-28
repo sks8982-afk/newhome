@@ -27,6 +27,7 @@ export interface Announcement {
   isPriority: boolean;
   isNew: boolean;
   fetchedAt: string;
+  notifiedChannels?: string[];
   raw?: Record<string, unknown>;
 }
 
