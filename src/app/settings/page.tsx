@@ -65,7 +65,10 @@ export default function SettingsPage(): React.ReactElement {
       <h2 className="text-xl font-semibold">⚙️ 필터 설정</h2>
 
       <section className="rounded-lg border border-slate-200 bg-white p-5">
-        <h3 className="mb-3 font-semibold text-slate-800">주택 유형</h3>
+        <h3 className="mb-1 font-semibold text-slate-800">주택 유형</h3>
+        <p className="mb-3 text-xs text-slate-500">
+          하나도 선택하지 않으면 <strong>전체 유형</strong>(공공임대 · 행복주택 · 영구임대 · 국민임대 · 분양 · 신혼희망타운)을 수집합니다.
+        </p>
         <div className="flex flex-wrap gap-2">
           {HOUSING_OPTIONS.map((opt) => {
             const active = filter.housingTypes.includes(opt);
@@ -85,6 +88,11 @@ export default function SettingsPage(): React.ReactElement {
             );
           })}
         </div>
+        {filter.housingTypes.length === 0 && (
+          <p className="mt-2 text-xs font-medium text-emerald-700">
+            ✓ 전체 유형 수집 중
+          </p>
+        )}
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-5">
@@ -111,8 +119,10 @@ export default function SettingsPage(): React.ReactElement {
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-5">
-        <h3 className="mb-1 font-semibold text-slate-800">우선 도시 (강조 표시)</h3>
+        <h3 className="mb-1 font-semibold text-slate-800">우선 도시 (텔레그램 알림 대상)</h3>
         <p className="mb-3 text-xs text-slate-500">
+          여기 적힌 도시명이 공고 제목/지역에 포함된 경우에만 텔레그램 알림이 발송됩니다.<br />
+          (대시보드/캘린더에는 모든 매칭 공고가 표시되고, ⭐ 강조 + 알림 대상이 됨)<br />
           쉼표 또는 공백으로 구분. 예: 수원, 화성, 오산
         </p>
         <input

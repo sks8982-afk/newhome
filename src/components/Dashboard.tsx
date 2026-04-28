@@ -79,11 +79,12 @@ export function Dashboard(): React.ReactElement {
             <>
               <span className="font-semibold">필터</span>
               {' · '}
-              유형 {filter.housingTypes.join(', ') || '전체'}
+              유형 {filter.housingTypes.length === 0 ? '전체' : filter.housingTypes.join(', ')}
               {' · '}
               지역 {filter.regions.join(', ') || '전체'}
               {' · '}
-              우선 <span className="font-semibold text-priority-700">{filter.priorityCities.join(', ') || '없음'}</span>
+              📱 알림 <span className="font-semibold text-priority-700">{filter.priorityCities.join(', ') || '없음'}</span>
+              <span className="ml-1 text-slate-400">(우선지역만 텔레그램 발송)</span>
             </>
           )}
         </div>
@@ -126,7 +127,7 @@ export function Dashboard(): React.ReactElement {
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">전체 매칭 공고 ({otherItems.length})</h2>
+        <h2 className="mb-3 text-lg font-semibold">기타 매칭 공고 ({otherItems.length}) <span className="text-xs font-normal text-slate-400">— 알림 발송 X, 사이트에만 표시</span></h2>
         {otherItems.length === 0 ? (
           <p className="rounded-md border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
             매칭되는 공고가 없습니다.

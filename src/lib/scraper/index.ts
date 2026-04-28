@@ -36,13 +36,21 @@ export async function refreshAnnouncements(opts: { notify?: boolean } = {}): Pro
   await upsertAnnouncements(tagged);
 
   const unnotified = await getUnnotifiedNewItems();
+  // Telegram 알림 정책: 우선 도시(priorityCities) 매칭 공고만 발송.
+  // 다른 매칭은 DB/사이트에 저장만 되고 알림은 안 감.
+  const toNotify = unnotified.filter((a) => a.isPriority);
   let notified = false;
-  if (opts.notify && unnotified.length > 0) {
-    const ok = await sendTelegramNotification(unnotified);
+  if (opts.notify && toNotify.length > 0) {
+    const ok = await sendTelegramNotification(toNotify);
     if (ok) {
-      await markNotified(unnotified.map((i) => i.id));
+      await markNotified(toNotify.map((i) => i.id));
       notified = true;
     }
+  }
+  // 우선 매칭이 아닌 unnotified도 markNotified 처리해서 재발송 막기 (이미 사이트에선 보임).
+  const skipNotify = unnotified.filter((a) => !a.isPriority).map((i) => i.id);
+  if (skipNotify.length > 0) {
+    await markNotified(skipNotify);
   }
 
   return {

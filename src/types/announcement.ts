@@ -36,8 +36,10 @@ export interface UserFilter {
   priorityCities: string[];
 }
 
+// housingTypes: 비워두면 전체(공공임대/행복주택/영구임대/국민임대/분양 등 모두)
+// priorityCities: Telegram 알림은 이 도시에 해당하는 공고만 발송
 export const DEFAULT_FILTER: UserFilter = {
-  housingTypes: ['행복주택'],
+  housingTypes: [],
   regions: ['경기'],
   priorityCities: ['수원', '화성', '오산'],
 };
