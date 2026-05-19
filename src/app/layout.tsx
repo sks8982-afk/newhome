@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import './globals.css';
 
@@ -6,6 +6,27 @@ export const metadata: Metadata = {
   title: '내집 알리미 - LH 청약플러스 행복주택 모니터',
   description:
     'LH 청약플러스 행복주택 공고를 자동으로 모니터링하고 수원·화성·오산 우선 알림을 제공합니다.',
+  applicationName: '내집 알리미',
+  appleWebApp: {
+    capable: true,
+    title: '내집 알리미',
+    statusBarStyle: 'default',
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  icons: {
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+    shortcut: ['/icon.svg'],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#0f172a',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({
