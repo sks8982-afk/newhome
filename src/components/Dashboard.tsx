@@ -18,12 +18,16 @@ export function Dashboard(): React.ReactElement {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [includePast, setIncludePast] = useState<boolean>(false);
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/announcements', { cache: 'no-store' });
+      const url = includePast
+        ? '/api/announcements?includePast=1'
+        : '/api/announcements';
+      const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) throw new Error(`목록 로드 실패: ${res.status}`);
       const data = (await res.json()) as ListResponse;
       setItems(data.items);
@@ -33,7 +37,7 @@ export function Dashboard(): React.ReactElement {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [includePast]);
 
   const refresh = useCallback(async (): Promise<void> => {
     setRefreshing(true);
@@ -94,6 +98,15 @@ export function Dashboard(): React.ReactElement {
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-500">
           {lastRefresh && <span>마지막 수집 {lastRefresh}</span>}
+          <label className="flex cursor-pointer select-none items-center gap-1.5 text-slate-600">
+            <input
+              type="checkbox"
+              checked={includePast}
+              onChange={(e) => setIncludePast(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-slate-300"
+            />
+            마감된 이전 공고 보기 <span className="text-slate-400">(최근 3개월)</span>
+          </label>
           <button
             type="button"
             onClick={() => { void refresh(); }}
