@@ -3,11 +3,19 @@ import { createHash } from 'node:crypto';
 import type { Announcement, HousingType } from '@/types/announcement';
 
 const LH_BASE = 'https://apply.lh.or.kr';
-// mi=1026: 임대주택(행복주택 포함) 공고 목록 메뉴
-const LH_LIST_URL = `${LH_BASE}/lhapply/apply/wt/wrtanc/selectWrtancList.do?mi=1026`;
+const LH_LIST_PATH = `${LH_BASE}/lhapply/apply/wt/wrtanc/selectWrtancList.do`;
 const LH_MAIN_URL = `${LH_BASE}/lhapply/main.do`;
+// 수집 대상 LH 공고 메뉴 (목록 테이블 구조는 동일)
+//   mi=1026: 임대주택(행복주택·국민임대·영구임대·공공임대 등)
+//   mi=1027: 분양주택(분양주택·공공분양·신혼희망타운 등)
+const LH_MENUS = ['1026', '1027'] as const;
 const MAX_PAGES = 5;
 const PAGE_SIZE = 50;
+
+function buildListUrl(mi: string, page?: number): string {
+  const paging = page ? `&currPage=${page}` : '';
+  return `${LH_LIST_PATH}?mi=${mi}${paging}`;
+}
 
 const HOUSING_TYPE_KEYWORDS: Array<[string, HousingType]> = [
   ['행복주택', '행복주택'],
@@ -75,20 +83,26 @@ interface RawRow {
 //   data-id2 -> ccrCnntSysDsCd
 //   data-id3 -> uppAisTpCd
 //   data-id4 -> aisTpCd
-function buildDetailUrl(d1: string, d2: string, d3: string, d4: string): string {
+function buildDetailUrl(
+  mi: string,
+  d1: string,
+  d2: string,
+  d3: string,
+  d4: string,
+): string {
   const params = new URLSearchParams({
     ccrCnntSysDsCd: d2,
     panId: d1,
     aisTpCd: d4,
     uppAisTpCd: d3,
-    mi: '1026',
+    mi,
     panKdCd: '',
     otxtPanId: '',
   });
   return `${LH_BASE}/lhapply/apply/wt/wrtanc/selectWrtancInfo.do?${params.toString()}`;
 }
 
-function parseList(html: string): RawRow[] {
+function parseList(html: string, mi: string): RawRow[] {
   const $ = cheerio.load(html);
   const rows: RawRow[] = [];
 
@@ -113,8 +127,8 @@ function parseList(html: string): RawRow[] {
 
     const detailUrl =
       d1 && d2 && d3 && d4
-        ? buildDetailUrl(d1, d2, d3, d4)
-        : LH_LIST_URL;
+        ? buildDetailUrl(mi, d1, d2, d3, d4)
+        : buildListUrl(mi);
 
     rows.push({
       noticeNo,
@@ -136,40 +150,33 @@ export interface ScrapeOptions {
   region?: string;
 }
 
-export async function scrapeLH(_opts: ScrapeOptions = {}): Promise<Announcement[]> {
-  const now = new Date().toISOString();
-
-  const headers: Record<string, string> = {
-    'User-Agent':
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    Accept:
-      'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
-    Referer: LH_MAIN_URL,
-  };
-
+// 한 메뉴(mi)의 공고 목록을 페이지 순회하며 수집한다.
+async function fetchMenuRows(
+  mi: string,
+  headers: Record<string, string>,
+): Promise<RawRow[]> {
   const seen = new Map<string, RawRow>();
   let lastFirstNo = '';
   for (let page = 1; page <= MAX_PAGES; page += 1) {
     let pageRows: RawRow[] = [];
     try {
-      const res = await fetch(`${LH_LIST_URL}&currPage=${page}`, {
+      const res = await fetch(buildListUrl(mi, page), {
         method: 'GET',
         headers,
         cache: 'no-store',
       });
       if (!res.ok) {
-        console.warn('[scrapeLH] page', page, 'non-200:', res.status);
+        console.warn('[scrapeLH] mi', mi, 'page', page, 'non-200:', res.status);
         break;
       }
       const html = await res.text();
       if (html.includes('eGovFrame 템플릿') && html.includes('잘못된 경로')) {
-        console.warn('[scrapeLH] error template (anti-bot block) on page', page);
+        console.warn('[scrapeLH] error template (anti-bot block) mi', mi, 'page', page);
         break;
       }
-      pageRows = parseList(html);
+      pageRows = parseList(html, mi);
     } catch (err: unknown) {
-      console.error('[scrapeLH] page', page, 'fetch failed:', err);
+      console.error('[scrapeLH] mi', mi, 'page', page, 'fetch failed:', err);
       break;
     }
 
@@ -188,8 +195,31 @@ export async function scrapeLH(_opts: ScrapeOptions = {}): Promise<Announcement[
     // Last page is shorter than page size — no more data after.
     if (pageRows.length < PAGE_SIZE) break;
   }
+  return [...seen.values()];
+}
 
-  const rows = [...seen.values()];
+export async function scrapeLH(_opts: ScrapeOptions = {}): Promise<Announcement[]> {
+  const now = new Date().toISOString();
+
+  const headers: Record<string, string> = {
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    Accept:
+      'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+    Referer: LH_MAIN_URL,
+  };
+
+  // 임대(1026) + 분양(1027) 메뉴를 모두 수집하고 noticeNo(panId) 기준으로 중복 제거.
+  const byNoticeNo = new Map<string, RawRow>();
+  for (const mi of LH_MENUS) {
+    const menuRows = await fetchMenuRows(mi, headers);
+    for (const r of menuRows) {
+      if (!byNoticeNo.has(r.noticeNo)) byNoticeNo.set(r.noticeNo, r);
+    }
+  }
+
+  const rows = [...byNoticeNo.values()];
 
   return rows.map((r): Announcement => {
     const housingType = detectHousingType(r.typeText, r.title);
