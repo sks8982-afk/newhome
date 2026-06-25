@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Announcement, UserFilter } from '@/types/announcement';
+import { housingCategory } from '@/lib/filter';
 import { AnnouncementCard } from './AnnouncementCard';
 import { Calendar } from './Calendar';
 import { NotificationBanner } from './NotificationBanner';
@@ -19,6 +20,8 @@ export function Dashboard(): React.ReactElement {
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [includePast, setIncludePast] = useState<boolean>(false);
+  const [showRental, setShowRental] = useState<boolean>(true);
+  const [showSale, setShowSale] = useState<boolean>(true);
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -67,15 +70,25 @@ export function Dashboard(): React.ReactElement {
   // - 데이터는 매일 10시 cron이 채워두므로 DB만 읽으면 충분.
   // - 새 정보가 필요하면 사용자가 '🔄 지금 새로고침' 버튼을 누르면 됨.
 
-  const newItems = useMemo(() => items.filter((i) => i.isNew), [items]);
-  const priorityItems = useMemo(() => items.filter((i) => i.isPriority), [items]);
+  // 임대/분양 체크 필터: 둘 다 켜져 있으면 전체 표시.
+  const visibleItems = useMemo(
+    () =>
+      items.filter((i) => {
+        const cat = housingCategory(i);
+        return (showRental && cat === '임대') || (showSale && cat === '분양');
+      }),
+    [items, showRental, showSale],
+  );
+
+  const newItems = useMemo(() => visibleItems.filter((i) => i.isNew), [visibleItems]);
+  const priorityItems = useMemo(() => visibleItems.filter((i) => i.isPriority), [visibleItems]);
   const seoulItems = useMemo(
-    () => items.filter((i) => !i.isPriority && i.region.includes('서울')),
-    [items],
+    () => visibleItems.filter((i) => !i.isPriority && i.region.includes('서울')),
+    [visibleItems],
   );
   const otherItems = useMemo(
-    () => items.filter((i) => !i.isPriority && !i.region.includes('서울')),
-    [items],
+    () => visibleItems.filter((i) => !i.isPriority && !i.region.includes('서울')),
+    [visibleItems],
   );
 
   return (
@@ -98,6 +111,27 @@ export function Dashboard(): React.ReactElement {
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-500">
           {lastRefresh && <span>마지막 수집 {lastRefresh}</span>}
+          <span className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
+            <span className="text-slate-400">유형</span>
+            <label className="flex cursor-pointer select-none items-center gap-1 text-slate-700">
+              <input
+                type="checkbox"
+                checked={showRental}
+                onChange={(e) => setShowRental(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-slate-300"
+              />
+              임대
+            </label>
+            <label className="flex cursor-pointer select-none items-center gap-1 text-slate-700">
+              <input
+                type="checkbox"
+                checked={showSale}
+                onChange={(e) => setShowSale(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-slate-300"
+              />
+              분양
+            </label>
+          </span>
           <label className="flex cursor-pointer select-none items-center gap-1.5 text-slate-600">
             <input
               type="checkbox"
@@ -126,7 +160,7 @@ export function Dashboard(): React.ReactElement {
 
       <NotificationBanner newItems={newItems} onDismiss={() => { void dismissNew(); }} />
 
-      <Calendar items={items} />
+      <Calendar items={visibleItems} />
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">

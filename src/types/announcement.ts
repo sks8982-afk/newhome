@@ -41,6 +41,6 @@ export interface UserFilter {
 // priorityCities: Telegram 알림은 이 도시에 해당하는 공고만 발송
 export const DEFAULT_FILTER: UserFilter = {
   housingTypes: [],
-  regions: ['경기'],
+  regions: ['경기', '서울'],
   priorityCities: ['수원', '화성', '오산'],
 };

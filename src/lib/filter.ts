@@ -1,5 +1,15 @@
-import type { Announcement, UserFilter } from '@/types/announcement';
+import type { Announcement, HousingType, UserFilter } from '@/types/announcement';
 import { cityKeywords } from './regions';
+
+// 분양(매매) 성격의 주택 유형. 나머지는 임대로 본다.
+// LH 수집 메뉴(임대=mi1026 / 분양=mi1027)와 정확히 일치한다.
+const SALE_HOUSING_TYPES: readonly HousingType[] = ['분양주택', '신혼희망타운'];
+
+export type HousingCategory = '임대' | '분양';
+
+export function housingCategory(a: Announcement): HousingCategory {
+  return SALE_HOUSING_TYPES.includes(a.housingType) ? '분양' : '임대';
+}
 
 export function matchesFilter(a: Announcement, f: UserFilter): boolean {
   const typeOk =
