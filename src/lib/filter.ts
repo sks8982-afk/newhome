@@ -1,4 +1,5 @@
 import type { Announcement, UserFilter } from '@/types/announcement';
+import { cityKeywords } from './regions';
 
 export function matchesFilter(a: Announcement, f: UserFilter): boolean {
   const typeOk =
@@ -13,8 +14,10 @@ export function matchesFilter(a: Announcement, f: UserFilter): boolean {
 
 export function isPriorityCity(a: Announcement, f: UserFilter): boolean {
   if (f.priorityCities.length === 0) return false;
-  return f.priorityCities.some(
-    (c) => (a.city ?? '').includes(c) || a.title.includes(c) || a.region.includes(c),
+  // 우선도시 이름뿐 아니라 그 도시의 하위 지역명(동탄→화성 등)도 함께 매칭한다.
+  const haystack = `${a.title} ${a.region} ${a.city ?? ''}`;
+  return f.priorityCities.some((c) =>
+    cityKeywords(c).some((kw) => haystack.includes(kw)),
   );
 }
 

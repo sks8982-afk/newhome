@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import { createHash } from 'node:crypto';
 import type { Announcement, HousingType } from '@/types/announcement';
+import { districtToCity } from '@/lib/regions';
 
 const LH_BASE = 'https://apply.lh.or.kr';
 const LH_LIST_PATH = `${LH_BASE}/lhapply/apply/wt/wrtanc/selectWrtancList.do`;
@@ -46,7 +47,11 @@ function detectHousingType(typeText: string, title: string): HousingType {
 }
 
 function detectCity(text: string): string | undefined {
-  return KOREAN_CITIES.find((c) => text.includes(c));
+  // 명시적 시(市) 이름이 있으면 우선 사용 (예: "용인 광교" → 용인).
+  const direct = KOREAN_CITIES.find((c) => text.includes(c));
+  if (direct) return direct;
+  // 없으면 동·신도시명으로 상위 시를 역추적 (예: "병점복합타운" → 화성).
+  return districtToCity(text);
 }
 
 function normalizeDate(raw: string): string {
