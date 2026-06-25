@@ -26,3 +26,20 @@ export function diffNew(prevSeen: string[], current: Announcement[]): Announceme
   const seen = new Set(prevSeen);
   return current.filter((a) => !seen.has(a.id));
 }
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// 한국시간(KST, UTC+9) 기준 오늘 날짜를 YYYY-MM-DD 로 반환.
+// 서버는 UTC 로 동작하므로 9시간을 더해 자정 부근 하루 밀림을 방지한다.
+export function todayKST(): string {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+// 마감일(applyEnd)이 오늘보다 이전이면 마감된(만료된) 공고로 본다.
+// - 마감일 당일은 아직 유효(>= today)하므로 표시한다.
+// - applyEnd 가 없거나 YYYY-MM-DD 형식이 아니면 만료로 보지 않는다(표시 유지).
+export function isExpired(a: Announcement, today: string = todayKST()): boolean {
+  const end = a.applyEnd;
+  if (!end || !ISO_DATE_RE.test(end)) return false;
+  return end < today;
+}
