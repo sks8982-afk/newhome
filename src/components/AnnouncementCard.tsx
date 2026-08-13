@@ -10,6 +10,16 @@ function toEok(manwon: number): string {
   return `${(manwon / 10000).toFixed(1).replace(/\.0$/, '')}억`;
 }
 
+// ㎡ → 평 (1평 = 3.3058㎡)
+function toPyeong(m2: number): number {
+  return Math.round(m2 / 3.3058);
+}
+function range(min: number, max: number, f: (n: number) => number | string): string {
+  const a = f(min);
+  const b = f(max);
+  return a === b ? `${a}` : `${a}~${b}`;
+}
+
 export function AnnouncementCard({ item }: Props): React.ReactElement {
   const base = 'rounded-lg border p-3 sm:p-4 transition hover:shadow-sm bg-white';
   const priorityCls = item.isPriority
@@ -20,6 +30,8 @@ export function AnnouncementCard({ item }: Props): React.ReactElement {
   const priceMax = typeof item.raw?.priceMax === 'number' ? item.raw.priceMax : undefined;
   const units = typeof item.raw?.units === 'number' ? item.raw.units : undefined;
   const address = typeof item.raw?.address === 'string' ? item.raw.address : undefined;
+  const areaMin = typeof item.raw?.areaMin === 'number' ? item.raw.areaMin : undefined;
+  const areaMax = typeof item.raw?.areaMax === 'number' ? item.raw.areaMax : undefined;
 
   const isJupjup = item.housingType === '무순위';
   const unitLabel = units !== undefined ? `${isJupjup ? '잔여 ' : ''}${units}세대` : undefined;
@@ -92,6 +104,14 @@ export function AnnouncementCard({ item }: Props): React.ReactElement {
           ) : (
             <span className="text-violet-700">🏠 {unitLabel}</span>
           )}
+        </p>
+      )}
+
+      {areaMin !== undefined && (
+        <p className="mt-1 text-xs text-slate-600">
+          📐 전용 {range(areaMin, areaMax ?? areaMin, (n) => Math.round(n))}㎡
+          {' · '}
+          {range(areaMin, areaMax ?? areaMin, toPyeong)}평
         </p>
       )}
 

@@ -145,16 +145,23 @@ async function fetchOp(
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => { setTimeout(r, ms); });
 
-// 주택형별(평형별) 상세에서 분양가 최저~최고(만원)를 뽑는다.
+interface MdlInfo {
+  priceMin?: number; // 만원
+  priceMax?: number;
+  areaMin?: number; // 전용면적 ㎡
+  areaMax?: number;
+}
+
+// 주택형별(평형별) 상세에서 분양가(만원)·전용면적(㎡, HOUSE_TY)을 뽑는다.
 // 정상 응답은 항상 data 배열을 가지므로, data 가 없으면(초당 제한 등 일시 오류)
-// 짧게 backoff 후 재시도한다. data:[](진짜 금액 없음)는 재시도하지 않는다.
-async function fetchPriceRange(
+// 짧게 backoff 후 재시도한다. data:[] 같은 정상 응답은 재시도하지 않는다.
+async function fetchMdlInfo(
   mdlOp: string,
   key: string,
   houseManageNo: string,
   attempt = 0,
-): Promise<{ min: number; max: number } | undefined> {
-  if (!houseManageNo) return undefined;
+): Promise<MdlInfo | undefined> {
+  if (!houseManageNo) return {};
   const params = new URLSearchParams({
     page: '1',
     perPage: '50',
@@ -170,8 +177,14 @@ async function fetchPriceRange(
         const amounts = json.data
           .map((r) => num(r.LTTOT_TOP_AMOUNT))
           .filter((n): n is number => n !== undefined);
-        if (amounts.length === 0) return undefined;
-        return { min: Math.min(...amounts), max: Math.max(...amounts) };
+        // HOUSE_TY "059.8303P" → 전용면적 59.83㎡
+        const sizes = json.data
+          .map((r) => Number.parseFloat(str(r.HOUSE_TY)))
+          .filter((n) => Number.isFinite(n) && n > 10 && n < 300);
+        const info: MdlInfo = {};
+        if (amounts.length > 0) { info.priceMin = Math.min(...amounts); info.priceMax = Math.max(...amounts); }
+        if (sizes.length > 0) { info.areaMin = Math.min(...sizes); info.areaMax = Math.max(...sizes); }
+        return info;
       }
     }
   } catch {
@@ -179,7 +192,7 @@ async function fetchPriceRange(
   }
   if (attempt < 3) {
     await sleep(300 * (attempt + 1));
-    return fetchPriceRange(mdlOp, key, houseManageNo, attempt + 1);
+    return fetchMdlInfo(mdlOp, key, houseManageNo, attempt + 1);
   }
   return undefined;
 }
@@ -219,13 +232,20 @@ export async function scrapeChungyak(regions: string[] = []): Promise<Announceme
     }
   }
 
-  // 공고마다 주택형별 API로 분양가 범위를 붙인다 (임대는 이 소스가 아니라 해당 없음).
+  // 공고마다 주택형별 API로 분양가·전용면적을 붙인다.
   // 동시성은 odcloud 초당 호출 제한을 넘지 않게 낮게 유지한다.
   const entries = [...byId.values()];
   return mapLimit(entries, PRICE_CONCURRENCY, async (e) => {
     const mdlOp = e.kind === 'remndr' ? 'getRemndrLttotPblancMdl' : 'getAPTLttotPblancMdl';
-    const price = await fetchPriceRange(mdlOp, key, e.houseManageNo);
-    if (!price) return e.a;
-    return { ...e.a, raw: { ...(e.a.raw ?? {}), priceMin: price.min, priceMax: price.max } };
+    const info = await fetchMdlInfo(mdlOp, key, e.houseManageNo);
+    if (!info || (info.priceMin === undefined && info.areaMin === undefined)) return e.a;
+    return {
+      ...e.a,
+      raw: {
+        ...(e.a.raw ?? {}),
+        ...(info.priceMin !== undefined ? { priceMin: info.priceMin, priceMax: info.priceMax } : {}),
+        ...(info.areaMin !== undefined ? { areaMin: info.areaMin, areaMax: info.areaMax } : {}),
+      },
+    };
   });
 }

@@ -201,39 +201,49 @@ interface LhDetail {
   priceMax?: number; // 만원
   units?: number;
   address?: string;
+  areaMin?: number; // 전용면적 ㎡
+  areaMax?: number;
 }
 
-// LH 분양 상세페이지 파싱: 주택형 안내 표의 '평균분양가격(원)'·'금회공급세대수',
+// LH 상세페이지 파싱: 주택형 안내 표의 '전용면적(㎡)'·'평균분양가격(원)'·'금회공급세대수',
 // 그리고 공급위치(주소). 청약홈 API에 없는 정보라 여기서만 파싱한다.
+// (전용면적 표는 임대·분양 상세 모두에 있고, 분양가는 분양 상세에만 있다.)
 function parseLhDetail(html: string): LhDetail {
   const $ = cheerio.load(html);
   const out: LhDetail = {};
 
   $('table').each((_, tbl) => {
-    if (out.priceMin !== undefined) return;
+    if (out.areaMin !== undefined) return; // 첫 주택형 안내 표만
     const trs = $(tbl).find('tr');
     if (trs.length < 2) return;
     const header = $(trs[0]).find('th,td').map((__, c) => $(c).text().replace(/\s+/g, '')).get();
+    const areaIdx = header.findIndex((t) => t.includes('전용면적'));
+    if (areaIdx < 0) return; // 주택형 안내 표가 아님
     const priceIdx = header.findIndex((t) => t.includes('평균분양가격') || t.includes('분양가격'));
-    if (priceIdx < 0) return;
     const unitIdx = header.findIndex((t) => t.includes('금회공급세대수'));
     const prices: number[] = [];
+    const sizes: number[] = [];
     let units = 0;
     trs.slice(1).each((__, tr) => {
       const cells = $(tr).find('th,td');
-      if (cells.length <= priceIdx) return;
-      const won = Number.parseInt($(cells[priceIdx]).text().replace(/[^0-9]/g, ''), 10);
-      if (Number.isFinite(won) && won > 0) prices.push(won);
+      if (cells.length <= areaIdx) return;
+      const area = Number.parseFloat($(cells[areaIdx]).text().replace(/[^0-9.]/g, ''));
+      if (Number.isFinite(area) && area > 10 && area < 300) sizes.push(area);
+      if (priceIdx >= 0 && cells.length > priceIdx) {
+        const won = Number.parseInt($(cells[priceIdx]).text().replace(/[^0-9]/g, ''), 10);
+        if (Number.isFinite(won) && won > 0) prices.push(won);
+      }
       if (unitIdx >= 0 && cells.length > unitIdx) {
         const u = Number.parseInt($(cells[unitIdx]).text().replace(/[^0-9]/g, ''), 10);
         if (Number.isFinite(u)) units += u;
       }
     });
+    if (sizes.length > 0) { out.areaMin = Math.min(...sizes); out.areaMax = Math.max(...sizes); }
     if (prices.length > 0) {
       out.priceMin = Math.round(Math.min(...prices) / 10000); // 원 → 만원
       out.priceMax = Math.round(Math.max(...prices) / 10000);
-      if (units > 0) out.units = units;
     }
+    if (units > 0) out.units = units;
   });
 
   // 주소: 지도 스크립트 변수 lctAraAdr_0(도로명, 가장 정확) 우선, 없으면 '소재지' li.
@@ -265,6 +275,7 @@ export async function enrichLhSaleItems(items: Announcement[]): Promise<Announce
       const d = parseLhDetail(await res.text());
       const raw: Record<string, unknown> = { ...(a.raw ?? {}) };
       if (d.priceMin !== undefined) { raw.priceMin = d.priceMin; raw.priceMax = d.priceMax; }
+      if (d.areaMin !== undefined) { raw.areaMin = d.areaMin; raw.areaMax = d.areaMax; }
       if (d.units !== undefined) raw.units = d.units;
       if (d.address) raw.address = d.address;
       if (Object.keys(raw).length > 0) enriched.set(a.id, { ...a, raw });
