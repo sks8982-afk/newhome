@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Announcement, UserFilter } from '@/types/announcement';
 import { housingCategory } from '@/lib/filter';
+import { cityKeywords } from '@/lib/regions';
 import { AnnouncementCard } from './AnnouncementCard';
 import { Calendar } from './Calendar';
 import { NotificationBanner } from './NotificationBanner';
@@ -23,6 +24,7 @@ export function Dashboard(): React.ReactElement {
   const [showRental, setShowRental] = useState<boolean>(true);
   const [showSale, setShowSale] = useState<boolean>(true);
   const [showJupjup, setShowJupjup] = useState<boolean>(true);
+  const [uncheckedCities, setUncheckedCities] = useState<Set<string>>(new Set());
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -85,15 +87,32 @@ export function Dashboard(): React.ReactElement {
     [items, showRental, showSale, showJupjup],
   );
 
-  const newItems = useMemo(() => visibleItems.filter((i) => i.isNew), [visibleItems]);
-  const priorityItems = useMemo(() => visibleItems.filter((i) => i.isPriority), [visibleItems]);
+  // 우선 도시 체크 필터: 설정의 priorityCities 로 체크박스를 만들고,
+  // 체크 해제한 도시에 해당하는 '우선' 공고는 숨긴다. (비우선 공고는 영향 없음)
+  const priorityCities = useMemo(() => filter?.priorityCities ?? [], [filter]);
+  const enabledCities = useMemo(
+    () => priorityCities.filter((c) => !uncheckedCities.has(c)),
+    [priorityCities, uncheckedCities],
+  );
+  const cityFilteredItems = useMemo(
+    () =>
+      visibleItems.filter((i) => {
+        if (!i.isPriority) return true;
+        const hay = `${i.title} ${i.region} ${i.city ?? ''}`;
+        return enabledCities.some((c) => cityKeywords(c).some((kw) => hay.includes(kw)));
+      }),
+    [visibleItems, enabledCities],
+  );
+
+  const newItems = useMemo(() => cityFilteredItems.filter((i) => i.isNew), [cityFilteredItems]);
+  const priorityItems = useMemo(() => cityFilteredItems.filter((i) => i.isPriority), [cityFilteredItems]);
   const seoulItems = useMemo(
-    () => visibleItems.filter((i) => !i.isPriority && i.region.includes('서울')),
-    [visibleItems],
+    () => cityFilteredItems.filter((i) => !i.isPriority && i.region.includes('서울')),
+    [cityFilteredItems],
   );
   const otherItems = useMemo(
-    () => visibleItems.filter((i) => !i.isPriority && !i.region.includes('서울')),
-    [visibleItems],
+    () => cityFilteredItems.filter((i) => !i.isPriority && !i.region.includes('서울')),
+    [cityFilteredItems],
   );
 
   return (
@@ -174,7 +193,35 @@ export function Dashboard(): React.ReactElement {
 
       <NotificationBanner newItems={newItems} onDismiss={() => { void dismissNew(); }} />
 
-      <Calendar items={visibleItems} />
+      <Calendar items={cityFilteredItems} />
+
+      {priorityCities.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm">
+          <span className="font-semibold text-slate-700">⭐ 우선 지역 필터</span>
+          <span className="text-xs text-slate-400">— 체크 해제한 지역은 숨김</span>
+          {priorityCities.map((c) => (
+            <label
+              key={c}
+              className="ml-1 flex cursor-pointer select-none items-center gap-1 rounded-full border border-priority-500 bg-priority-50 px-2.5 py-0.5 text-priority-700"
+            >
+              <input
+                type="checkbox"
+                checked={!uncheckedCities.has(c)}
+                onChange={() =>
+                  setUncheckedCities((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(c)) next.delete(c);
+                    else next.add(c);
+                    return next;
+                  })
+                }
+                className="h-3.5 w-3.5 rounded border-slate-300"
+              />
+              {c}
+            </label>
+          ))}
+        </div>
+      )}
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">
