@@ -1,4 +1,5 @@
 import type { Announcement } from '@/types/announcement';
+import { mapSearchQuery } from '@/lib/util/map';
 
 interface Props {
   item: Announcement;
@@ -23,10 +24,8 @@ export function AnnouncementCard({ item }: Props): React.ReactElement {
   const isJupjup = item.housingType === '무순위';
   const unitLabel = units !== undefined ? `${isJupjup ? '잔여 ' : ''}${units}세대` : undefined;
 
-  // 지도 검색: 아파트명은 안 잡히는 경우가 많아 주소 우선. 주소가 없으면
-  // 제목보다는 도시명(수원/화성 등)이 그나마 검색되므로 city → title 순 폴백.
-  const mapQuery =
-    address && address.length > 3 ? address : item.city ?? item.title;
+  // 지도 검색어: 정밀 주소면 주소, 택지지구처럼 뭉뚱그린 주소면 단지명으로 자동 선택.
+  const mapQuery = mapSearchQuery(item);
   const naverUrl = `https://map.naver.com/v5/search/${encodeURIComponent(mapQuery)}`;
   const kakaoUrl = `https://map.kakao.com/?q=${encodeURIComponent(mapQuery)}`;
 
