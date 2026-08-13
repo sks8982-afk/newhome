@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import { createHash } from 'node:crypto';
 import type { Announcement, HousingType } from '@/types/announcement';
 import { detectCity } from '@/lib/regions';
+import { mapLimit } from '@/lib/util/concurrency';
 
 const LH_BASE = 'https://apply.lh.or.kr';
 const LH_LIST_PATH = `${LH_BASE}/lhapply/apply/wt/wrtanc/selectWrtancList.do`;
@@ -188,6 +189,54 @@ async function fetchMenuRows(
   return [...seen.values()];
 }
 
+interface LhDetail {
+  priceMin?: number; // 만원
+  priceMax?: number; // 만원
+  units?: number;
+  address?: string;
+}
+
+// LH 분양 상세페이지 파싱: 주택형 안내 표의 '평균분양가격(원)'·'금회공급세대수',
+// 그리고 공급위치(주소). 청약홈 API에 없는 정보라 여기서만 파싱한다.
+function parseLhDetail(html: string): LhDetail {
+  const $ = cheerio.load(html);
+  const out: LhDetail = {};
+
+  $('table').each((_, tbl) => {
+    if (out.priceMin !== undefined) return;
+    const trs = $(tbl).find('tr');
+    if (trs.length < 2) return;
+    const header = $(trs[0]).find('th,td').map((__, c) => $(c).text().replace(/\s+/g, '')).get();
+    const priceIdx = header.findIndex((t) => t.includes('평균분양가격') || t.includes('분양가격'));
+    if (priceIdx < 0) return;
+    const unitIdx = header.findIndex((t) => t.includes('금회공급세대수'));
+    const prices: number[] = [];
+    let units = 0;
+    trs.slice(1).each((__, tr) => {
+      const cells = $(tr).find('th,td');
+      if (cells.length <= priceIdx) return;
+      const won = Number.parseInt($(cells[priceIdx]).text().replace(/[^0-9]/g, ''), 10);
+      if (Number.isFinite(won) && won > 0) prices.push(won);
+      if (unitIdx >= 0 && cells.length > unitIdx) {
+        const u = Number.parseInt($(cells[unitIdx]).text().replace(/[^0-9]/g, ''), 10);
+        if (Number.isFinite(u)) units += u;
+      }
+    });
+    if (prices.length > 0) {
+      out.priceMin = Math.round(Math.min(...prices) / 10000); // 원 → 만원
+      out.priceMax = Math.round(Math.max(...prices) / 10000);
+      if (units > 0) out.units = units;
+    }
+  });
+
+  // 공급위치(주소) — 라벨 인접 셀에서 best-effort 추출.
+  const label = $('th,td').filter((_, el) => /공급위치|대지위치|소재지/.test($(el).text().trim())).first();
+  const addr = label.next('td').text().replace(/\s+/g, ' ').trim();
+  if (addr && addr.length <= 120) out.address = addr;
+
+  return out;
+}
+
 export async function scrapeLH(_opts: ScrapeOptions = {}): Promise<Announcement[]> {
   const now = new Date().toISOString();
 
@@ -211,7 +260,7 @@ export async function scrapeLH(_opts: ScrapeOptions = {}): Promise<Announcement[
 
   const rows = [...byNoticeNo.values()];
 
-  return rows.map((r): Announcement => {
+  const items = rows.map((r): Announcement => {
     const housingType = detectHousingType(r.typeText, r.title);
     const city = detectCity(`${r.title} ${r.region}`);
     const id = sha1(`LH:${r.noticeNo}`);
@@ -232,4 +281,26 @@ export async function scrapeLH(_opts: ScrapeOptions = {}): Promise<Announcement[
       fetchedAt: now,
     };
   });
+
+  // LH 분양(공공분양·신혼희망타운)만 상세페이지에서 금액·세대수·주소를 보강.
+  // 임대는 분양가 개념이 없어 제외. (청약홈 API에 없어 파싱하는 최소 범위)
+  const saleItems = items.filter(
+    (a) => a.housingType === '분양주택' || a.housingType === '신혼희망타운',
+  );
+  const enriched = new Map<string, Announcement>();
+  await mapLimit(saleItems, 4, async (a) => {
+    try {
+      const res = await fetch(a.detailUrl, { headers, cache: 'no-store' });
+      if (!res.ok) return;
+      const d = parseLhDetail(await res.text());
+      const raw: Record<string, unknown> = {};
+      if (d.priceMin !== undefined) { raw.priceMin = d.priceMin; raw.priceMax = d.priceMax; }
+      if (d.units !== undefined) raw.units = d.units;
+      if (d.address) raw.address = d.address;
+      if (Object.keys(raw).length > 0) enriched.set(a.id, { ...a, raw });
+    } catch {
+      /* 상세 파싱 실패 시 금액 없이 표시 */
+    }
+  });
+  return items.map((a) => enriched.get(a.id) ?? a);
 }

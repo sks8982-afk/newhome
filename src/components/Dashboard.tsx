@@ -117,7 +117,7 @@ export function Dashboard(): React.ReactElement {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
         <div className="text-sm text-slate-700">
           {filter && (
             <>
@@ -133,7 +133,7 @@ export function Dashboard(): React.ReactElement {
             </>
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs text-slate-500">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
           {lastRefresh && <span>마지막 수집 {lastRefresh}</span>}
           <span className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
             <span className="text-slate-400">유형</span>

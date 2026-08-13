@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Announcement, HousingType } from '@/types/announcement';
 import { detectCity } from '@/lib/regions';
 import { monthsAgoKST, todayKST } from '@/lib/filter';
+import { mapLimit } from '@/lib/util/concurrency';
 
 // 한국부동산원 청약홈 분양정보 조회 서비스 (data.go.kr 15098547)
 // - getAPTLttotPblancDetail   : APT 분양(민간·공공분양, 신혼희망타운)
@@ -25,6 +26,12 @@ function sha1(input: string): string {
 
 function str(v: unknown): string {
   return typeof v === 'string' ? v.trim() : '';
+}
+
+// 문자열/숫자 어느 쪽이든 양의 정수로 (아니면 undefined).
+function num(v: unknown): number | undefined {
+  const n = typeof v === 'number' ? v : Number.parseInt(String(v ?? ''), 10);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
 // 여러 후보 필드 중 가장 늦은(또는 빠른) 유효 날짜(YYYY-MM-DD)를 고른다.
@@ -75,6 +82,12 @@ function mapRow(row: Row, kind: 'apt' | 'remndr', now: string): Announcement | n
   const detailUrl = str(row.PBLANC_URL) || APPLYHOME_LIST;
   const id = sha1(`CHUNGYAK:${str(row.HOUSE_MANAGE_NO) || noticeNo}`);
 
+  // 지도 검색용 주소 + 세대수(줍줍=잔여세대수)를 raw 에 저장 (모두 API 제공값).
+  const units = num(row.TOT_SUPLY_HSHLDCO);
+  const raw: Record<string, unknown> = {};
+  if (address) raw.address = address;
+  if (units) raw.units = units;
+
   return {
     id,
     source: 'CHUNGYAK',
@@ -91,6 +104,7 @@ function mapRow(row: Row, kind: 'apt' | 'remndr', now: string): Announcement | n
     isPriority: false,
     isNew: false,
     fetchedAt: now,
+    raw: Object.keys(raw).length > 0 ? raw : undefined,
   };
 }
 
@@ -154,8 +168,8 @@ async function fetchPriceRange(
       const json = (await res.json()) as { data?: Row[] };
       if (Array.isArray(json.data)) {
         const amounts = json.data
-          .map((r) => Number.parseInt(str(r.LTTOT_TOP_AMOUNT), 10))
-          .filter((n) => Number.isFinite(n) && n > 0);
+          .map((r) => num(r.LTTOT_TOP_AMOUNT))
+          .filter((n): n is number => n !== undefined);
         if (amounts.length === 0) return undefined;
         return { min: Math.min(...amounts), max: Math.max(...amounts) };
       }
@@ -171,20 +185,6 @@ async function fetchPriceRange(
 }
 
 // 동시성 제한 map (공고당 추가 호출이 있어 cron 60초 안에 끝내기 위함).
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let i = 0;
-  const worker = async (): Promise<void> => {
-    while (i < items.length) {
-      const cur = i;
-      i += 1;
-      results[cur] = await fn(items[cur]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
-
 interface Entry {
   a: Announcement;
   houseManageNo: string;
