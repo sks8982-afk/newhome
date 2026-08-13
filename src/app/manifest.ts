@@ -2,10 +2,10 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: '내집 알리미 - LH 청약플러스 행복주택 모니터',
+    name: '내집 알리미 - 청약·분양·줍줍 모니터',
     short_name: '내집 알리미',
     description:
-      'LH 청약플러스 행복주택 공고를 자동으로 모니터링하고 수원·화성·오산 우선 알림을 제공합니다.',
+      'LH·청약홈의 임대·분양·무순위(줍줍) 공고를 한곳에 모아 수원·화성·오산·서울 우선으로 알려드립니다.',
     start_url: '/',
     scope: '/',
     display: 'standalone',
