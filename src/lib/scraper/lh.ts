@@ -259,12 +259,10 @@ function parseLhDetail(html: string): LhDetail {
   return out;
 }
 
-// LH 분양(공공분양·신혼희망타운) 항목을 상세페이지에서 금액·세대수·주소로 보강.
-// 임대는 분양가 개념이 없어 대상 아님. scrapeLH(활성) + 백필(DB 저장분) 공용.
-export async function enrichLhSaleItems(items: Announcement[]): Promise<Announcement[]> {
-  const targets = items.filter(
-    (a) => a.source === 'LH' && (a.housingType === '분양주택' || a.housingType === '신혼희망타운'),
-  );
+// LH 항목을 상세페이지에서 전용면적·세대수·주소(+분양이면 금액)로 보강.
+// 임대·분양 모두 대상(임대는 분양가만 없음). 증분 보강 파이프라인에서 호출.
+export async function enrichLhItems(items: Announcement[]): Promise<Announcement[]> {
+  const targets = items.filter((a) => a.source === 'LH');
   if (targets.length === 0) return items;
 
   const enriched = new Map<string, Announcement>();
@@ -322,5 +320,6 @@ export async function scrapeLH(_opts: ScrapeOptions = {}): Promise<Announcement[
     };
   });
 
-  return enrichLhSaleItems(items);
+  // 상세(금액·면적·주소) 보강은 지역 필터 후 증분으로 처리(refreshAnnouncements).
+  return items;
 }

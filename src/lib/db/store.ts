@@ -48,7 +48,8 @@ export async function upsertAnnouncements(items: Announcement[]): Promise<void> 
         status: a.status ?? null,
         detailUrl: a.detailUrl,
         isPriority: a.isPriority,
-        raw: a.raw ? (a.raw as Prisma.InputJsonValue) : Prisma.JsonNull,
+        // raw(금액·면적·주소)는 값이 있을 때만 갱신 — 상세보강 결과가 재수집으로 지워지지 않게.
+        ...(a.raw ? { raw: a.raw as Prisma.InputJsonValue } : {}),
       },
       create: {
         id: a.id,
