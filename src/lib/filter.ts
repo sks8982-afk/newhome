@@ -1,13 +1,16 @@
 import type { Announcement, HousingType, UserFilter } from '@/types/announcement';
 import { cityKeywords } from './regions';
 
-// 분양(매매) 성격의 주택 유형. 나머지는 임대로 본다.
-// LH 수집 메뉴(임대=mi1026 / 분양=mi1027)와 정확히 일치한다.
+// 주택 유형을 3개 카테고리로 분류한다.
+//  - 줍줍: 무순위/잔여세대 (청약홈)
+//  - 분양: 분양주택·신혼희망타운 (LH 분양 mi1027 + 청약홈 APT 분양)
+//  - 임대: 그 외 전부 (행복주택·국민/영구/공공임대·기타)
 const SALE_HOUSING_TYPES: readonly HousingType[] = ['분양주택', '신혼희망타운'];
 
-export type HousingCategory = '임대' | '분양';
+export type HousingCategory = '임대' | '분양' | '줍줍';
 
 export function housingCategory(a: Announcement): HousingCategory {
+  if (a.housingType === '무순위') return '줍줍';
   return SALE_HOUSING_TYPES.includes(a.housingType) ? '분양' : '임대';
 }
 

@@ -7,6 +7,7 @@ export type HousingType =
   | '공공임대'
   | '분양주택'
   | '신혼희망타운'
+  | '무순위'
   | '기타';
 
 export type AnnouncementStatus = '접수중' | '공고중' | '정정공고중' | '마감' | string;

@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio';
 import { createHash } from 'node:crypto';
 import type { Announcement, HousingType } from '@/types/announcement';
-import { districtToCity } from '@/lib/regions';
+import { detectCity } from '@/lib/regions';
 
 const LH_BASE = 'https://apply.lh.or.kr';
 const LH_LIST_PATH = `${LH_BASE}/lhapply/apply/wt/wrtanc/selectWrtancList.do`;
@@ -27,13 +27,6 @@ const HOUSING_TYPE_KEYWORDS: Array<[string, HousingType]> = [
   ['분양', '분양주택'],
 ];
 
-const KOREAN_CITIES = [
-  '수원', '화성', '오산', '용인', '성남', '안양', '부천', '평택',
-  '시흥', '안산', '광명', '의왕', '군포', '하남', '남양주', '구리',
-  '의정부', '고양', '파주', '김포', '이천', '여주', '양주', '동두천',
-  '광주', '안성', '포천',
-];
-
 function sha1(input: string): string {
   return createHash('sha1').update(input).digest('hex').slice(0, 16);
 }
@@ -44,14 +37,6 @@ function detectHousingType(typeText: string, title: string): HousingType {
     if (haystack.includes(keyword)) return type;
   }
   return '기타';
-}
-
-function detectCity(text: string): string | undefined {
-  // 명시적 시(市) 이름이 있으면 우선 사용 (예: "용인 광교" → 용인).
-  const direct = KOREAN_CITIES.find((c) => text.includes(c));
-  if (direct) return direct;
-  // 없으면 동·신도시명으로 상위 시를 역추적 (예: "병점복합타운" → 화성).
-  return districtToCity(text);
 }
 
 function normalizeDate(raw: string): string {

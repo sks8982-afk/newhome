@@ -16,10 +16,16 @@ export function AnnouncementCard({ item }: Props): React.ReactElement {
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2 text-xs">
             <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-700">
-              {item.source}
+              {item.source === 'CHUNGYAK' ? '청약홈' : item.source}
             </span>
-            <span className="rounded bg-emerald-100 px-2 py-0.5 text-emerald-700">
-              {item.housingType}
+            <span
+              className={`rounded px-2 py-0.5 ${
+                item.housingType === '무순위'
+                  ? 'bg-violet-100 font-semibold text-violet-700'
+                  : 'bg-emerald-100 text-emerald-700'
+              }`}
+            >
+              {item.housingType === '무순위' ? '줍줍' : item.housingType}
             </span>
             <span className="text-slate-500">{item.region}</span>
             {item.status && (

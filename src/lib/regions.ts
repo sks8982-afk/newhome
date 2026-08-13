@@ -29,3 +29,20 @@ export function districtToCity(text: string): string | undefined {
   }
   return undefined;
 }
+
+// 경기 주요 시(市) 목록 — 제목/주소에서 도시명을 직접 뽑을 때 사용.
+const KOREAN_CITIES = [
+  '수원', '화성', '오산', '용인', '성남', '안양', '부천', '평택',
+  '시흥', '안산', '광명', '의왕', '군포', '하남', '남양주', '구리',
+  '의정부', '고양', '파주', '김포', '이천', '여주', '양주', '동두천',
+  '광주', '안성', '포천',
+];
+
+// 텍스트(제목+주소)에서 도시를 감지한다.
+// 1) 명시적 시(市) 이름 우선 (예: "용인 광교" → 용인)
+// 2) 없으면 동·신도시명으로 상위 시 역추적 (예: "병점복합타운" → 화성)
+export function detectCity(text: string): string | undefined {
+  const direct = KOREAN_CITIES.find((c) => text.includes(c));
+  if (direct) return direct;
+  return districtToCity(text);
+}

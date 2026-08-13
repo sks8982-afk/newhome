@@ -22,6 +22,7 @@ export function Dashboard(): React.ReactElement {
   const [includePast, setIncludePast] = useState<boolean>(false);
   const [showRental, setShowRental] = useState<boolean>(true);
   const [showSale, setShowSale] = useState<boolean>(true);
+  const [showJupjup, setShowJupjup] = useState<boolean>(true);
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -70,14 +71,18 @@ export function Dashboard(): React.ReactElement {
   // - 데이터는 매일 10시 cron이 채워두므로 DB만 읽으면 충분.
   // - 새 정보가 필요하면 사용자가 '🔄 지금 새로고침' 버튼을 누르면 됨.
 
-  // 임대/분양 체크 필터: 둘 다 켜져 있으면 전체 표시.
+  // 임대/분양/줍줍 체크 필터: 모두 켜져 있으면 전체 표시.
   const visibleItems = useMemo(
     () =>
       items.filter((i) => {
         const cat = housingCategory(i);
-        return (showRental && cat === '임대') || (showSale && cat === '분양');
+        return (
+          (showRental && cat === '임대') ||
+          (showSale && cat === '분양') ||
+          (showJupjup && cat === '줍줍')
+        );
       }),
-    [items, showRental, showSale],
+    [items, showRental, showSale, showJupjup],
   );
 
   const newItems = useMemo(() => visibleItems.filter((i) => i.isNew), [visibleItems]);
@@ -130,6 +135,15 @@ export function Dashboard(): React.ReactElement {
                 className="h-3.5 w-3.5 rounded border-slate-300"
               />
               분양
+            </label>
+            <label className="flex cursor-pointer select-none items-center gap-1 text-slate-700">
+              <input
+                type="checkbox"
+                checked={showJupjup}
+                onChange={(e) => setShowJupjup(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-slate-300"
+              />
+              줍줍
             </label>
           </span>
           <label className="flex cursor-pointer select-none items-center gap-1.5 text-slate-600">

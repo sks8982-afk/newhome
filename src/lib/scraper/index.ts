@@ -1,5 +1,6 @@
 import type { Announcement } from '@/types/announcement';
 import { scrapeLH } from './lh';
+import { scrapeChungyak } from './chungyak';
 import {
   loadAnnouncements,
   loadFilter,
@@ -25,9 +26,14 @@ export async function refreshAnnouncements(
   const filter = await loadFilter();
   const seenIds = new Set(await loadSeenIds());
 
-  const lhItems = await scrapeLH();
+  // LH(임대/분양) + 청약홈(민간·공공분양, 줍줍)을 함께 수집.
+  const [lhItems, chungyakItems] = await Promise.all([
+    scrapeLH(),
+    scrapeChungyak(filter.regions),
+  ]);
+  const allItems = [...lhItems, ...chungyakItems];
 
-  const matched = lhItems.filter((a) => matchesFilter(a, filter));
+  const matched = allItems.filter((a) => matchesFilter(a, filter));
   const prioritized = applyPriority(matched, filter);
   const tagged = prioritized.map((a) => ({ ...a, isNew: !seenIds.has(a.id) }));
 
@@ -41,7 +47,7 @@ export async function refreshAnnouncements(
   }
 
   return {
-    total: lhItems.length,
+    total: allItems.length,
     matched: matched.length,
     newCount: tagged.filter((a) => a.isNew).length,
     newItems: tagged.filter((a) => a.isNew),

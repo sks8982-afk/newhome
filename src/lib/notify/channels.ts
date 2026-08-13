@@ -1,5 +1,6 @@
 import type { Announcement } from '@/types/announcement';
 import { prisma } from '@/lib/db/client';
+import { isExpired } from '@/lib/filter';
 import { sendTelegramNotification } from './telegram';
 
 export interface NotifyChannel {
@@ -24,11 +25,12 @@ export function getNotifyChannels(): NotifyChannel[] {
   // 마찬가지로 경기도 거주자도 신청 가능한 전국 공고는 경기 채널에 포함.
   // (LH 사이트의 '지역=서울특별시' 검색과는 다른 결과가 나오는 점 유의.)
 
+  // 이미 마감된(만료된) 공고는 어느 채널에서도 알림하지 않는다.
   if (process.env.TELEGRAM_CHAT_ID) {
     channels.push({
       name: '경기 우선',
       chatId: process.env.TELEGRAM_CHAT_ID,
-      match: (a) => a.region.includes('경기') && a.isPriority,
+      match: (a) => !isExpired(a) && a.region.includes('경기') && a.isPriority,
     });
   }
 
@@ -36,7 +38,7 @@ export function getNotifyChannels(): NotifyChannel[] {
     channels.push({
       name: '서울 전체',
       chatId: process.env.TELEGRAM_CHAT_ID_SEOUL,
-      match: (a) => a.region.includes('서울'),
+      match: (a) => !isExpired(a) && a.region.includes('서울'),
     });
   }
 
