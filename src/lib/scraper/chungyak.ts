@@ -12,6 +12,8 @@ const PER_PAGE = 100;
 const MAX_PAGES = 5;
 // 모집공고일 하한: 최근 개월 (활성 + 최근 마감분 확보. 표시 단계에서 3개월로 다시 정리됨)
 const LOOKBACK_MONTHS = 6;
+// 분양가(주택형별) 조회 동시성 — odcloud 초당 제한 회피용
+const PRICE_CONCURRENCY = 3;
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -127,6 +129,68 @@ async function fetchOp(
   return rows;
 }
 
+const sleep = (ms: number): Promise<void> => new Promise((r) => { setTimeout(r, ms); });
+
+// 주택형별(평형별) 상세에서 분양가 최저~최고(만원)를 뽑는다.
+// 정상 응답은 항상 data 배열을 가지므로, data 가 없으면(초당 제한 등 일시 오류)
+// 짧게 backoff 후 재시도한다. data:[](진짜 금액 없음)는 재시도하지 않는다.
+async function fetchPriceRange(
+  mdlOp: string,
+  key: string,
+  houseManageNo: string,
+  attempt = 0,
+): Promise<{ min: number; max: number } | undefined> {
+  if (!houseManageNo) return undefined;
+  const params = new URLSearchParams({
+    page: '1',
+    perPage: '50',
+    returnType: 'json',
+    'cond[HOUSE_MANAGE_NO::EQ]': houseManageNo,
+  });
+  const url = `${BASE}/${mdlOp}?${params.toString()}&serviceKey=${key}`;
+  try {
+    const res = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+    if (res.ok) {
+      const json = (await res.json()) as { data?: Row[] };
+      if (Array.isArray(json.data)) {
+        const amounts = json.data
+          .map((r) => Number.parseInt(str(r.LTTOT_TOP_AMOUNT), 10))
+          .filter((n) => Number.isFinite(n) && n > 0);
+        if (amounts.length === 0) return undefined;
+        return { min: Math.min(...amounts), max: Math.max(...amounts) };
+      }
+    }
+  } catch {
+    /* 아래 재시도로 처리 */
+  }
+  if (attempt < 3) {
+    await sleep(300 * (attempt + 1));
+    return fetchPriceRange(mdlOp, key, houseManageNo, attempt + 1);
+  }
+  return undefined;
+}
+
+// 동시성 제한 map (공고당 추가 호출이 있어 cron 60초 안에 끝내기 위함).
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let i = 0;
+  const worker = async (): Promise<void> => {
+    while (i < items.length) {
+      const cur = i;
+      i += 1;
+      results[cur] = await fn(items[cur]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+interface Entry {
+  a: Announcement;
+  houseManageNo: string;
+  kind: 'apt' | 'remndr';
+}
+
 // regions: 조회할 공급지역명 목록(예: ['경기','서울']). 비어 있으면 전국.
 export async function scrapeChungyak(regions: string[] = []): Promise<Announcement[]> {
   const key = process.env.CHUNGYAK_SERVICE_KEY;
@@ -143,15 +207,25 @@ export async function scrapeChungyak(regions: string[] = []): Promise<Announceme
     ['getRemndrLttotPblancDetail', 'remndr'],
   ];
 
-  const byId = new Map<string, Announcement>();
+  const byId = new Map<string, Entry>();
   for (const [op, kind] of ops) {
     for (const area of areas) {
-      const raw = await fetchOp(op, key, area, gte);
-      for (const row of raw) {
+      const rows = await fetchOp(op, key, area, gte);
+      for (const row of rows) {
         const a = mapRow(row, kind, now);
-        if (a && !byId.has(a.id)) byId.set(a.id, a);
+        if (!a || byId.has(a.id)) continue;
+        byId.set(a.id, { a, houseManageNo: str(row.HOUSE_MANAGE_NO) || a.noticeNo, kind });
       }
     }
   }
-  return [...byId.values()];
+
+  // 공고마다 주택형별 API로 분양가 범위를 붙인다 (임대는 이 소스가 아니라 해당 없음).
+  // 동시성은 odcloud 초당 호출 제한을 넘지 않게 낮게 유지한다.
+  const entries = [...byId.values()];
+  return mapLimit(entries, PRICE_CONCURRENCY, async (e) => {
+    const mdlOp = e.kind === 'remndr' ? 'getRemndrLttotPblancMdl' : 'getAPTLttotPblancMdl';
+    const price = await fetchPriceRange(mdlOp, key, e.houseManageNo);
+    if (!price) return e.a;
+    return { ...e.a, raw: { ...(e.a.raw ?? {}), priceMin: price.min, priceMax: price.max } };
+  });
 }

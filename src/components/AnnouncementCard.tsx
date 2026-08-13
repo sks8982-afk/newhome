@@ -4,12 +4,19 @@ interface Props {
   item: Announcement;
 }
 
+// 만원 단위 → "3.5억" (소수 첫째자리, 정수면 "3억")
+function toEok(manwon: number): string {
+  return `${(manwon / 10000).toFixed(1).replace(/\.0$/, '')}억`;
+}
+
 export function AnnouncementCard({ item }: Props): React.ReactElement {
   const base =
     'rounded-lg border p-4 transition hover:shadow-sm bg-white';
   const priorityCls = item.isPriority
     ? 'border-priority-500 bg-priority-50 ring-1 ring-priority-500'
     : 'border-slate-200';
+  const priceMin = typeof item.raw?.priceMin === 'number' ? item.raw.priceMin : undefined;
+  const priceMax = typeof item.raw?.priceMax === 'number' ? item.raw.priceMax : undefined;
   return (
     <article className={`${base} ${priorityCls}`}>
       <div className="flex items-start justify-between gap-4">
@@ -62,6 +69,12 @@ export function AnnouncementCard({ item }: Props): React.ReactElement {
           >
             {item.title}
           </a>
+          {priceMin !== undefined && (
+            <p className="mt-1 text-xs font-semibold text-amber-700">
+              💰 분양가 {toEok(priceMin)}
+              {priceMax !== undefined && priceMax !== priceMin ? `~${toEok(priceMax)}` : ''}
+            </p>
+          )}
           <p className="mt-1 text-xs text-slate-500">
             공고번호 {item.noticeNo} · 게시 {item.postedAt || '-'}
             {item.applyEnd && ` · 마감 ${item.applyEnd}`}

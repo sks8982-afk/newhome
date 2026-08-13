@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import type { Announcement, UserFilter } from '@/types/announcement';
 import { DEFAULT_FILTER } from '@/types/announcement';
 import { prisma } from './client';
@@ -28,6 +29,7 @@ export async function loadAnnouncements(): Promise<Announcement[]> {
     isNew: !seen.has(r.id),
     fetchedAt: r.fetchedAt.toISOString(),
     notifiedChannels: r.notifiedChannels ?? [],
+    raw: (r.raw as Record<string, unknown>) ?? undefined,
   }));
 }
 
@@ -46,6 +48,7 @@ export async function upsertAnnouncements(items: Announcement[]): Promise<void> 
         status: a.status ?? null,
         detailUrl: a.detailUrl,
         isPriority: a.isPriority,
+        raw: a.raw ? (a.raw as Prisma.InputJsonValue) : Prisma.JsonNull,
       },
       create: {
         id: a.id,
@@ -61,6 +64,7 @@ export async function upsertAnnouncements(items: Announcement[]): Promise<void> 
         status: a.status ?? null,
         detailUrl: a.detailUrl,
         isPriority: a.isPriority,
+        raw: a.raw ? (a.raw as Prisma.InputJsonValue) : Prisma.JsonNull,
       },
     });
   }
