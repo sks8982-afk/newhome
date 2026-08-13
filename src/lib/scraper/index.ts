@@ -1,5 +1,5 @@
 import type { Announcement } from '@/types/announcement';
-import { scrapeLH } from './lh';
+import { scrapeLH, enrichLhSaleItems } from './lh';
 import { scrapeChungyak } from './chungyak';
 import {
   loadAnnouncements,
@@ -8,8 +8,36 @@ import {
   markSeen,
   upsertAnnouncements,
 } from '@/lib/db/store';
-import { applyPriority, matchesFilter } from '@/lib/filter';
+import { applyPriority, matchesFilter, monthsAgoKST } from '@/lib/filter';
 import { dispatchToChannels, type DispatchResult } from '@/lib/notify/channels';
+
+// 이미 저장된 LH 분양 중 금액/주소가 아직 없는 항목(마감 3개월 이내)을 상세페이지로 보강.
+// 마감되어 활성 목록에서 빠진 과거 공고까지 커버. 한 번 채워지면 다음엔 건너뛴다.
+const BACKFILL_MAX = 40;
+async function backfillLhDetails(): Promise<void> {
+  const cutoff = monthsAgoKST(3);
+  const stored = await loadAnnouncements();
+  const need = stored
+    .filter(
+      (a) =>
+        a.source === 'LH' &&
+        (a.housingType === '분양주택' || a.housingType === '신혼희망타운') &&
+        a.raw?.address === undefined &&
+        a.raw?.priceMin === undefined &&
+        a.raw?.enrichTried === undefined && // 이미 시도한 건 재시도 안 함
+        (a.applyEnd === undefined || a.applyEnd >= cutoff),
+    )
+    .slice(0, BACKFILL_MAX);
+  if (need.length === 0) return;
+  const enriched = await enrichLhSaleItems(need);
+  // 금액/주소를 못 얻은 항목(든든전세·잔여매각 등)은 enrichTried 표시로 재시도 방지.
+  const toUpsert = enriched.map((a) =>
+    a.raw?.address !== undefined || a.raw?.priceMin !== undefined
+      ? a
+      : { ...a, raw: { ...(a.raw ?? {}), enrichTried: true } },
+  );
+  await upsertAnnouncements(toUpsert);
+}
 
 export interface ScrapeResult {
   total: number;
@@ -38,6 +66,9 @@ export async function refreshAnnouncements(
   const tagged = prioritized.map((a) => ({ ...a, isNew: !seenIds.has(a.id) }));
 
   await upsertAnnouncements(tagged);
+
+  // 저장분 중 LH 분양 상세(금액·주소) 미보강 항목 보강.
+  await backfillLhDetails();
 
   let dispatch: DispatchResult[] = [];
   if (opts.notify) {

@@ -23,8 +23,10 @@ export function AnnouncementCard({ item }: Props): React.ReactElement {
   const isJupjup = item.housingType === '무순위';
   const unitLabel = units !== undefined ? `${isJupjup ? '잔여 ' : ''}${units}세대` : undefined;
 
-  // 지도 검색: 아파트명은 안 잡히는 경우가 많아 주소 우선, 없으면 제목.
-  const mapQuery = address && address.length > 3 ? address : item.title;
+  // 지도 검색: 아파트명은 안 잡히는 경우가 많아 주소 우선. 주소가 없으면
+  // 제목보다는 도시명(수원/화성 등)이 그나마 검색되므로 city → title 순 폴백.
+  const mapQuery =
+    address && address.length > 3 ? address : item.city ?? item.title;
   const naverUrl = `https://map.naver.com/v5/search/${encodeURIComponent(mapQuery)}`;
   const kakaoUrl = `https://map.kakao.com/?q=${encodeURIComponent(mapQuery)}`;
 

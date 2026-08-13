@@ -7,6 +7,13 @@ import { mapLimit } from '@/lib/util/concurrency';
 const LH_BASE = 'https://apply.lh.or.kr';
 const LH_LIST_PATH = `${LH_BASE}/lhapply/apply/wt/wrtanc/selectWrtancList.do`;
 const LH_MAIN_URL = `${LH_BASE}/lhapply/main.do`;
+const LH_HEADERS: Record<string, string> = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+  Referer: LH_MAIN_URL,
+};
 // 수집 대상 LH 공고 메뉴 (목록 테이블 구조는 동일)
 //   mi=1026: 임대주택(행복주택·국민임대·영구임대·공공임대 등)
 //   mi=1027: 분양주택(분양주택·공공분양·신혼희망타운 등)
@@ -229,30 +236,52 @@ function parseLhDetail(html: string): LhDetail {
     }
   });
 
-  // 공급위치(주소) — 라벨 인접 셀에서 best-effort 추출.
-  const label = $('th,td').filter((_, el) => /공급위치|대지위치|소재지/.test($(el).text().trim())).first();
-  const addr = label.next('td').text().replace(/\s+/g, ' ').trim();
-  if (addr && addr.length <= 120) out.address = addr;
+  // 주소: 지도 스크립트 변수 lctAraAdr_0(도로명, 가장 정확) 우선, 없으면 '소재지' li.
+  const jsAddr = html.match(/lctAraAdr_0\s*=\s*"([^"]+)"/)?.[1]?.trim();
+  const jsDtl = html.match(/lctAraDtlAdr_0\s*=\s*"([^"]*)"/)?.[1]?.trim();
+  if (jsAddr) {
+    out.address = jsDtl ? `${jsAddr} ${jsDtl}` : jsAddr;
+  } else {
+    const li = html.match(/소재지\s*:\s*([^<]+)</)?.[1]?.replace(/\s+/g, ' ').trim();
+    if (li && li.length <= 120) out.address = li;
+  }
 
   return out;
+}
+
+// LH 분양(공공분양·신혼희망타운) 항목을 상세페이지에서 금액·세대수·주소로 보강.
+// 임대는 분양가 개념이 없어 대상 아님. scrapeLH(활성) + 백필(DB 저장분) 공용.
+export async function enrichLhSaleItems(items: Announcement[]): Promise<Announcement[]> {
+  const targets = items.filter(
+    (a) => a.source === 'LH' && (a.housingType === '분양주택' || a.housingType === '신혼희망타운'),
+  );
+  if (targets.length === 0) return items;
+
+  const enriched = new Map<string, Announcement>();
+  await mapLimit(targets, 4, async (a) => {
+    try {
+      const res = await fetch(a.detailUrl, { headers: LH_HEADERS, cache: 'no-store' });
+      if (!res.ok) return;
+      const d = parseLhDetail(await res.text());
+      const raw: Record<string, unknown> = { ...(a.raw ?? {}) };
+      if (d.priceMin !== undefined) { raw.priceMin = d.priceMin; raw.priceMax = d.priceMax; }
+      if (d.units !== undefined) raw.units = d.units;
+      if (d.address) raw.address = d.address;
+      if (Object.keys(raw).length > 0) enriched.set(a.id, { ...a, raw });
+    } catch {
+      /* 상세 파싱 실패 시 금액/주소 없이 표시 */
+    }
+  });
+  return items.map((a) => enriched.get(a.id) ?? a);
 }
 
 export async function scrapeLH(_opts: ScrapeOptions = {}): Promise<Announcement[]> {
   const now = new Date().toISOString();
 
-  const headers: Record<string, string> = {
-    'User-Agent':
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    Accept:
-      'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
-    Referer: LH_MAIN_URL,
-  };
-
   // 임대(1026) + 분양(1027) 메뉴를 모두 수집하고 noticeNo(panId) 기준으로 중복 제거.
   const byNoticeNo = new Map<string, RawRow>();
   for (const mi of LH_MENUS) {
-    const menuRows = await fetchMenuRows(mi, headers);
+    const menuRows = await fetchMenuRows(mi, LH_HEADERS);
     for (const r of menuRows) {
       if (!byNoticeNo.has(r.noticeNo)) byNoticeNo.set(r.noticeNo, r);
     }
@@ -282,25 +311,5 @@ export async function scrapeLH(_opts: ScrapeOptions = {}): Promise<Announcement[
     };
   });
 
-  // LH 분양(공공분양·신혼희망타운)만 상세페이지에서 금액·세대수·주소를 보강.
-  // 임대는 분양가 개념이 없어 제외. (청약홈 API에 없어 파싱하는 최소 범위)
-  const saleItems = items.filter(
-    (a) => a.housingType === '분양주택' || a.housingType === '신혼희망타운',
-  );
-  const enriched = new Map<string, Announcement>();
-  await mapLimit(saleItems, 4, async (a) => {
-    try {
-      const res = await fetch(a.detailUrl, { headers, cache: 'no-store' });
-      if (!res.ok) return;
-      const d = parseLhDetail(await res.text());
-      const raw: Record<string, unknown> = {};
-      if (d.priceMin !== undefined) { raw.priceMin = d.priceMin; raw.priceMax = d.priceMax; }
-      if (d.units !== undefined) raw.units = d.units;
-      if (d.address) raw.address = d.address;
-      if (Object.keys(raw).length > 0) enriched.set(a.id, { ...a, raw });
-    } catch {
-      /* 상세 파싱 실패 시 금액 없이 표시 */
-    }
-  });
-  return items.map((a) => enriched.get(a.id) ?? a);
+  return enrichLhSaleItems(items);
 }
