@@ -33,7 +33,8 @@ export function AnnouncementCard({ item }: Props): React.ReactElement {
   const areaMin = typeof item.raw?.areaMin === 'number' ? item.raw.areaMin : undefined;
   const areaMax = typeof item.raw?.areaMax === 'number' ? item.raw.areaMax : undefined;
 
-  const isJupjup = item.housingType === '무순위';
+  const isJupjup = item.housingType === '무순위' || item.housingType === '임의공급';
+  const typeLabel = item.housingType === '무순위' ? '줍줍' : item.housingType;
   const unitLabel = units !== undefined ? `${isJupjup ? '잔여 ' : ''}${units}세대` : undefined;
 
   // 지도 검색어: 정밀 주소면 주소, 택지지구처럼 뭉뚱그린 주소면 단지명으로 자동 선택.
@@ -54,7 +55,7 @@ export function AnnouncementCard({ item }: Props): React.ReactElement {
               : 'bg-emerald-100 text-emerald-700'
           }`}
         >
-          {isJupjup ? '줍줍' : item.housingType}
+          {typeLabel}
         </span>
         <span className="text-slate-500">{item.region}</span>
         {item.status && (

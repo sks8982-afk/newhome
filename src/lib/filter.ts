@@ -12,7 +12,7 @@ const SALE_HOUSING_TYPES: readonly HousingType[] = [
 export type HousingCategory = '임대' | '분양' | '줍줍';
 
 export function housingCategory(a: Announcement): HousingCategory {
-  if (a.housingType === '무순위') return '줍줍';
+  if (a.housingType === '무순위' || a.housingType === '임의공급') return '줍줍';
   return SALE_HOUSING_TYPES.includes(a.housingType) ? '분양' : '임대';
 }
 

@@ -28,15 +28,21 @@ function str(v: unknown): string {
   return typeof v === 'string' ? v.trim() : '';
 }
 
-// 문자열/숫자 어느 쪽이든 양의 정수로 (아니면 undefined).
+// 문자열/숫자 어느 쪽이든 양의 정수로 (아니면 undefined). 콤마("50,960") 허용.
 function num(v: unknown): number | undefined {
-  const n = typeof v === 'number' ? v : Number.parseInt(String(v ?? ''), 10);
+  const n = typeof v === 'number' ? v : Number.parseInt(String(v ?? '').replace(/[,\s]/g, ''), 10);
   return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+// 날짜 정규화: 일부 오퍼레이션(임의공급)은 "20260820"(YYYYMMDD)로 옴 → "2026-08-20".
+function normDate(v: unknown): string {
+  const s = str(v);
+  return /^\d{8}$/.test(s) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : s;
 }
 
 // 여러 후보 필드 중 가장 늦은(또는 빠른) 유효 날짜(YYYY-MM-DD)를 고른다.
 function pickDate(row: Row, keys: readonly string[], mode: 'max' | 'min'): string | undefined {
-  const dates = keys.map((k) => str(row[k])).filter((d) => ISO_DATE_RE.test(d));
+  const dates = keys.map((k) => normDate(row[k])).filter((d) => ISO_DATE_RE.test(d));
   if (dates.length === 0) return undefined;
   return dates.sort()[mode === 'max' ? dates.length - 1 : 0];
 }
@@ -61,7 +67,7 @@ function deriveStatus(applyStart: string | undefined, applyEnd: string | undefin
   return '접수중';
 }
 
-type Kind = 'apt' | 'remndr' | 'urbty';
+type Kind = 'apt' | 'remndr' | 'urbty' | 'opt';
 
 function detectAptType(row: Row): HousingType {
   const hay = `${str(row.HOUSE_DTL_SECD_NM)} ${str(row.HOUSE_NM)} ${str(row.RENT_SECD_NM)}`;
@@ -88,14 +94,20 @@ function mapRow(row: Row, kind: Kind, now: string): Announcement | null {
   const region = str(row.SUBSCRPT_AREA_CODE_NM); // "경기" · "서울" 등
   const address = str(row.HSSPLY_ADRES);
   const city = detectCity(`${title} ${address}`);
-  const postedAt = str(row.RCRIT_PBLANC_DE);
-  // apt 는 순위별 접수일, remndr/urbty 는 SUBSCRPT_RCEPT_* 를 쓴다.
+  const postedAt = normDate(row.RCRIT_PBLANC_DE);
+  // apt 는 순위별 접수일, 그 외(remndr/urbty/opt)는 SUBSCRPT_RCEPT_* 를 쓴다.
   const startKeys = kind === 'apt' ? APT_START_KEYS : REMNDR_START_KEYS;
   const endKeys = kind === 'apt' ? APT_END_KEYS : REMNDR_END_KEYS;
   const applyStart = pickDate(row, startKeys, 'min');
   const applyEnd = pickDate(row, endKeys, 'max');
   const housingType: HousingType =
-    kind === 'remndr' ? '무순위' : kind === 'urbty' ? detectUrbtyType(row) : detectAptType(row);
+    kind === 'remndr'
+      ? '무순위'
+      : kind === 'opt'
+        ? '임의공급'
+        : kind === 'urbty'
+          ? detectUrbtyType(row)
+          : detectAptType(row);
   const detailUrl = str(row.PBLANC_URL) || APPLYHOME_LIST;
   const id = sha1(`CHUNGYAK:${str(row.HOUSE_MANAGE_NO) || noticeNo}`);
 
@@ -225,6 +237,7 @@ const MDL_OP: Record<Kind, string> = {
   apt: 'getAPTLttotPblancMdl',
   remndr: 'getRemndrLttotPblancMdl',
   urbty: 'getUrbtyOfctlLttotPblancMdl',
+  opt: 'getOPTLttotPblancMdl',
 };
 
 // regions: 조회할 공급지역명 목록(예: ['경기','서울']). 비어 있으면 전국.
@@ -242,6 +255,7 @@ export async function scrapeChungyak(regions: string[] = []): Promise<Announceme
     ['getAPTLttotPblancDetail', 'apt'], // APT 분양(민간·공공분양·신혼희망타운)
     ['getRemndrLttotPblancDetail', 'remndr'], // APT 무순위/잔여세대(줍줍)
     ['getUrbtyOfctlLttotPblancDetail', 'urbty'], // 오피스텔/도시형/생활숙박/민간임대
+    ['getOPTLttotPblancDetail', 'opt'], // 임의공급(선착순·추첨 등, 줍줍성)
   ];
 
   const byId = new Map<string, Entry>();
