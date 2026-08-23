@@ -8,6 +8,10 @@ export type HousingType =
   | '분양주택'
   | '신혼희망타운'
   | '무순위'
+  | '오피스텔'
+  | '도시형생활주택'
+  | '생활숙박시설'
+  | '민간임대'
   | '기타';
 
 export type AnnouncementStatus = '접수중' | '공고중' | '정정공고중' | '마감' | string;

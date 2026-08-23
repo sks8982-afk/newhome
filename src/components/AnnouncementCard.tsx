@@ -97,7 +97,7 @@ export function AnnouncementCard({ item }: Props): React.ReactElement {
         <p className="mt-1 text-xs font-semibold text-amber-700">
           {priceMin !== undefined ? (
             <>
-              💰 분양가 {toEok(priceMin)}
+              💰 {toEok(priceMin)}
               {priceMax !== undefined && priceMax !== priceMin ? `~${toEok(priceMax)}` : ''}
               {unitLabel ? <span className="ml-1 font-normal text-slate-500">· {unitLabel}</span> : null}
             </>

@@ -5,7 +5,9 @@ import { cityKeywords } from './regions';
 //  - 줍줍: 무순위/잔여세대 (청약홈)
 //  - 분양: 분양주택·신혼희망타운 (LH 분양 mi1027 + 청약홈 APT 분양)
 //  - 임대: 그 외 전부 (행복주택·국민/영구/공공임대·기타)
-const SALE_HOUSING_TYPES: readonly HousingType[] = ['분양주택', '신혼희망타운'];
+const SALE_HOUSING_TYPES: readonly HousingType[] = [
+  '분양주택', '신혼희망타운', '오피스텔', '도시형생활주택', '생활숙박시설',
+];
 
 export type HousingCategory = '임대' | '분양' | '줍줍';
 

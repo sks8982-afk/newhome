@@ -61,13 +61,26 @@ function deriveStatus(applyStart: string | undefined, applyEnd: string | undefin
   return '접수중';
 }
 
+type Kind = 'apt' | 'remndr' | 'urbty';
+
 function detectAptType(row: Row): HousingType {
   const hay = `${str(row.HOUSE_DTL_SECD_NM)} ${str(row.HOUSE_NM)} ${str(row.RENT_SECD_NM)}`;
   if (hay.includes('신혼희망')) return '신혼희망타운';
   return '분양주택';
 }
 
-function mapRow(row: Row, kind: 'apt' | 'remndr', now: string): Announcement | null {
+// 오피스텔/도시형/생활숙박/민간임대 구분.
+// HOUSE_SECD_NM 은 "도시형/오피스텔/생활숙박시설/민간임대" 합본 라벨이라 쓰면 안 됨.
+// 개별 유형인 HOUSE_DTL_SECD_NM 로만 판별한다.
+function detectUrbtyType(row: Row): HousingType {
+  const dtl = str(row.HOUSE_DTL_SECD_NM);
+  if (dtl.includes('민간임대')) return '민간임대';
+  if (dtl.includes('생활숙박')) return '생활숙박시설';
+  if (dtl.includes('도시형')) return '도시형생활주택';
+  return '오피스텔';
+}
+
+function mapRow(row: Row, kind: Kind, now: string): Announcement | null {
   const noticeNo = str(row.PBLANC_NO) || str(row.HOUSE_MANAGE_NO);
   const title = str(row.HOUSE_NM);
   if (!noticeNo || !title) return null;
@@ -76,9 +89,13 @@ function mapRow(row: Row, kind: 'apt' | 'remndr', now: string): Announcement | n
   const address = str(row.HSSPLY_ADRES);
   const city = detectCity(`${title} ${address}`);
   const postedAt = str(row.RCRIT_PBLANC_DE);
-  const applyStart = pickDate(row, kind === 'apt' ? APT_START_KEYS : REMNDR_START_KEYS, 'min');
-  const applyEnd = pickDate(row, kind === 'apt' ? APT_END_KEYS : REMNDR_END_KEYS, 'max');
-  const housingType: HousingType = kind === 'remndr' ? '무순위' : detectAptType(row);
+  // apt 는 순위별 접수일, remndr/urbty 는 SUBSCRPT_RCEPT_* 를 쓴다.
+  const startKeys = kind === 'apt' ? APT_START_KEYS : REMNDR_START_KEYS;
+  const endKeys = kind === 'apt' ? APT_END_KEYS : REMNDR_END_KEYS;
+  const applyStart = pickDate(row, startKeys, 'min');
+  const applyEnd = pickDate(row, endKeys, 'max');
+  const housingType: HousingType =
+    kind === 'remndr' ? '무순위' : kind === 'urbty' ? detectUrbtyType(row) : detectAptType(row);
   const detailUrl = str(row.PBLANC_URL) || APPLYHOME_LIST;
   const id = sha1(`CHUNGYAK:${str(row.HOUSE_MANAGE_NO) || noticeNo}`);
 
@@ -174,12 +191,12 @@ async function fetchMdlInfo(
     if (res.ok) {
       const json = (await res.json()) as { data?: Row[] };
       if (Array.isArray(json.data)) {
+        // APT: LTTOT_TOP_AMOUNT / HOUSE_TY, 오피스텔: SUPLY_AMOUNT / EXCLUSE_AR (둘 다 만원·㎡)
         const amounts = json.data
-          .map((r) => num(r.LTTOT_TOP_AMOUNT))
+          .map((r) => num(r.LTTOT_TOP_AMOUNT) ?? num(r.SUPLY_AMOUNT))
           .filter((n): n is number => n !== undefined);
-        // HOUSE_TY "059.8303P" → 전용면적 59.83㎡
         const sizes = json.data
-          .map((r) => Number.parseFloat(str(r.HOUSE_TY)))
+          .map((r) => Number.parseFloat(str(r.HOUSE_TY) || str(r.EXCLUSE_AR) || str(r.TP)))
           .filter((n) => Number.isFinite(n) && n > 10 && n < 300);
         const info: MdlInfo = {};
         if (amounts.length > 0) { info.priceMin = Math.min(...amounts); info.priceMax = Math.max(...amounts); }
@@ -197,12 +214,18 @@ async function fetchMdlInfo(
   return undefined;
 }
 
-// 동시성 제한 map (공고당 추가 호출이 있어 cron 60초 안에 끝내기 위함).
 interface Entry {
   a: Announcement;
   houseManageNo: string;
-  kind: 'apt' | 'remndr';
+  kind: Kind;
 }
+
+// 종류별 주택형별(Mdl) 오퍼레이션.
+const MDL_OP: Record<Kind, string> = {
+  apt: 'getAPTLttotPblancMdl',
+  remndr: 'getRemndrLttotPblancMdl',
+  urbty: 'getUrbtyOfctlLttotPblancMdl',
+};
 
 // regions: 조회할 공급지역명 목록(예: ['경기','서울']). 비어 있으면 전국.
 export async function scrapeChungyak(regions: string[] = []): Promise<Announcement[]> {
@@ -215,9 +238,10 @@ export async function scrapeChungyak(regions: string[] = []): Promise<Announceme
   const now = new Date().toISOString();
   const gte = monthsAgoKST(LOOKBACK_MONTHS);
   const areas = regions.length > 0 ? regions : [undefined];
-  const ops: Array<[string, 'apt' | 'remndr']> = [
-    ['getAPTLttotPblancDetail', 'apt'],
-    ['getRemndrLttotPblancDetail', 'remndr'],
+  const ops: Array<[string, Kind]> = [
+    ['getAPTLttotPblancDetail', 'apt'], // APT 분양(민간·공공분양·신혼희망타운)
+    ['getRemndrLttotPblancDetail', 'remndr'], // APT 무순위/잔여세대(줍줍)
+    ['getUrbtyOfctlLttotPblancDetail', 'urbty'], // 오피스텔/도시형/생활숙박/민간임대
   ];
 
   const byId = new Map<string, Entry>();
@@ -236,8 +260,7 @@ export async function scrapeChungyak(regions: string[] = []): Promise<Announceme
   // 동시성은 odcloud 초당 호출 제한을 넘지 않게 낮게 유지한다.
   const entries = [...byId.values()];
   return mapLimit(entries, PRICE_CONCURRENCY, async (e) => {
-    const mdlOp = e.kind === 'remndr' ? 'getRemndrLttotPblancMdl' : 'getAPTLttotPblancMdl';
-    const info = await fetchMdlInfo(mdlOp, key, e.houseManageNo);
+    const info = await fetchMdlInfo(MDL_OP[e.kind], key, e.houseManageNo);
     if (!info || (info.priceMin === undefined && info.areaMin === undefined)) return e.a;
     return {
       ...e.a,
