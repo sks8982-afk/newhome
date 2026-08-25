@@ -50,3 +50,20 @@ export const DEFAULT_FILTER: UserFilter = {
   regions: ['경기', '서울'],
   priorityCities: ['수원', '화성', '오산'],
 };
+
+// 내 조건 맞춤 매칭용 프로필 (브라우저 localStorage 저장).
+export interface UserProfile {
+  birthDate: string; // "YYYY-MM-DD" (빈 값이면 미설정)
+  isHomeless: boolean; // 무주택 여부
+  hasIncome: boolean; // 소득 있음
+  savingsCount: number; // 청약통장 납입 횟수
+  budgetEok: number; // 예산 상한(억). 0이면 예산 필터 미적용
+}
+
+export const DEFAULT_PROFILE: UserProfile = {
+  birthDate: '',
+  isHomeless: true,
+  hasIncome: true,
+  savingsCount: 0,
+  budgetEok: 6,
+};

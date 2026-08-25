@@ -1,4 +1,9 @@
-import type { Announcement, HousingType, UserFilter } from '@/types/announcement';
+import type {
+  Announcement,
+  HousingType,
+  UserFilter,
+  UserProfile,
+} from '@/types/announcement';
 import { cityKeywords } from './regions';
 
 // 주택 유형을 3개 카테고리로 분류한다.
@@ -68,4 +73,42 @@ export function isExpired(a: Announcement, today: string = todayKST()): boolean 
   const end = a.applyEnd;
   if (!end || !ISO_DATE_RE.test(end)) return false;
   return end < today;
+}
+
+// 생년월일(YYYY-MM-DD) → 만 나이. 형식이 틀리면 undefined.
+export function ageFromKST(birthDate: string, today: string = todayKST()): number | undefined {
+  if (!ISO_DATE_RE.test(birthDate)) return undefined;
+  const [by, bm, bd] = birthDate.split('-').map(Number);
+  const [ty, tm, td] = today.split('-').map(Number);
+  let age = ty - by;
+  if (tm < bm || (tm === bm && td < bd)) age -= 1;
+  return age;
+}
+
+// 내 조건 대략 매칭 (마감 전 공고 대상).
+//  - 분양/줍줍/오피스텔: 최고분양가 ≤ 예산(억)
+//  - 임대: 무주택 필수 + 나이로 청년/고령 전용 공고만 걸러냄
+// (소득·자산 상한, 특별공급 자격, 정확한 1순위는 공고문 확인 필요 — 대략 분류용)
+export function matchesProfile(
+  a: Announcement,
+  p: UserProfile,
+  today: string = todayKST(),
+): boolean {
+  if (isExpired(a, today)) return false;
+  const cat = housingCategory(a);
+
+  if (cat === '분양' || cat === '줍줍') {
+    if (!p.budgetEok) return false;
+    const priceMax = typeof a.raw?.priceMax === 'number' ? a.raw.priceMax : undefined;
+    return priceMax !== undefined && priceMax <= p.budgetEok * 10000; // raw 가격은 만원 단위
+  }
+
+  // 임대
+  if (!p.isHomeless) return false;
+  const age = ageFromKST(p.birthDate, today);
+  if (age !== undefined) {
+    if ((a.title.includes('고령') || a.title.includes('경로')) && age < 60) return false;
+    if (a.title.includes('청년') && (age < 19 || age > 39)) return false;
+  }
+  return true;
 }

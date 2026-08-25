@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Announcement, UserFilter } from '@/types/announcement';
-import { housingCategory } from '@/lib/filter';
+import type { Announcement, UserFilter, UserProfile } from '@/types/announcement';
+import { DEFAULT_PROFILE } from '@/types/announcement';
+import { housingCategory, matchesProfile } from '@/lib/filter';
 import { cityKeywords } from '@/lib/regions';
+import { hasProfile, loadProfile } from '@/lib/profile';
 import { AnnouncementCard } from './AnnouncementCard';
 import { Calendar } from './Calendar';
 import { NotificationBanner } from './NotificationBanner';
@@ -25,6 +27,11 @@ export function Dashboard(): React.ReactElement {
   const [showSale, setShowSale] = useState<boolean>(true);
   const [showJupjup, setShowJupjup] = useState<boolean>(true);
   const [uncheckedCities, setUncheckedCities] = useState<Set<string>>(new Set());
+  const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+
+  useEffect(() => {
+    setProfile(loadProfile());
+  }, []);
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -102,6 +109,12 @@ export function Dashboard(): React.ReactElement {
         return enabledCities.some((c) => cityKeywords(c).some((kw) => hay.includes(kw)));
       }),
     [visibleItems, enabledCities],
+  );
+
+  // 🎯 내 조건 맞춤: 프로필(예산·무주택·나이) 기준 대략 매칭 (마감 전만).
+  const matchedItems = useMemo(
+    () => cityFilteredItems.filter((i) => matchesProfile(i, profile)),
+    [cityFilteredItems, profile],
   );
 
   const newItems = useMemo(() => cityFilteredItems.filter((i) => i.isNew), [cityFilteredItems]);
@@ -192,6 +205,36 @@ export function Dashboard(): React.ReactElement {
       )}
 
       <NotificationBanner newItems={newItems} onDismiss={() => { void dismissNew(); }} />
+
+      <section className="rounded-lg border border-priority-400 bg-priority-50 p-4">
+        <h2 className="mb-1 text-lg font-semibold">
+          🎯 내 조건 맞춤 ({matchedItems.length})
+          <span className="ml-2 text-xs font-normal text-slate-500">
+            — 분양·줍줍 예산 이하 + 임대 무주택 자격(대략)
+          </span>
+        </h2>
+        {!hasProfile(profile) ? (
+          <p className="rounded-md border border-dashed border-priority-300 bg-white p-4 text-center text-sm text-slate-500">
+            <a href="/settings" className="font-semibold text-priority-700 underline">
+              설정 → 🎯 내 조건
+            </a>
+            에서 생년월일·예산 등을 입력하면 맞는 공고만 모아서 보여드립니다.
+          </p>
+        ) : matchedItems.length === 0 ? (
+          <p className="rounded-md border border-dashed border-priority-300 bg-white p-4 text-center text-sm text-slate-500">
+            지금 조건에 맞는(마감 전) 공고가 없습니다. 예산을 올리거나 새로고침해 보세요.
+          </p>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2">
+            {matchedItems.map((i) => (
+              <AnnouncementCard key={i.id} item={i} />
+            ))}
+          </div>
+        )}
+        <p className="mt-2 text-xs text-slate-400">
+          ※ 대략 분류입니다. 소득·자산 상한, 특별공급 자격, 정확한 1순위는 공고문을 확인하세요.
+        </p>
+      </section>
 
       <Calendar items={cityFilteredItems} />
 
