@@ -116,6 +116,8 @@ export function matchesProfile(
   today: string = todayKST(),
 ): boolean {
   if (isExpired(a, today)) return false;
+  // 관심지역만 — 우선도시(수원·화성·오산, isPriority) + 서울. 나머지 지역은 제외.
+  if (!a.isPriority && !a.region.includes('서울')) return false;
   const cat = housingCategory(a);
 
   if (cat === '분양' || cat === '줍줍') {
