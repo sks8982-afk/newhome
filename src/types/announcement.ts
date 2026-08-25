@@ -65,5 +65,5 @@ export const DEFAULT_PROFILE: UserProfile = {
   isHomeless: true,
   hasIncome: true,
   savingsCount: 0,
-  budgetEok: 6,
+  budgetEok: 5,
 };

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Announcement, UserFilter, UserProfile } from '@/types/announcement';
 import { DEFAULT_PROFILE } from '@/types/announcement';
-import { housingCategory, matchesProfile } from '@/lib/filter';
+import { buildingType, housingCategory, matchesProfile } from '@/lib/filter';
 import { cityKeywords } from '@/lib/regions';
 import { hasProfile, loadProfile } from '@/lib/profile';
 import { AnnouncementCard } from './AnnouncementCard';
@@ -26,6 +26,7 @@ export function Dashboard(): React.ReactElement {
   const [showRental, setShowRental] = useState<boolean>(true);
   const [showSale, setShowSale] = useState<boolean>(true);
   const [showJupjup, setShowJupjup] = useState<boolean>(true);
+  const [uncheckedBuildings, setUncheckedBuildings] = useState<Set<string>>(new Set());
   const [uncheckedCities, setUncheckedCities] = useState<Set<string>>(new Set());
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
 
@@ -80,18 +81,25 @@ export function Dashboard(): React.ReactElement {
   // - 데이터는 매일 10시 cron이 채워두므로 DB만 읽으면 충분.
   // - 새 정보가 필요하면 사용자가 '🔄 지금 새로고침' 버튼을 누르면 됨.
 
-  // 임대/분양/줍줍 체크 필터: 모두 켜져 있으면 전체 표시.
+  // 현재 목록에 실제로 존재하는 건물 종류(체크박스 표시용).
+  const presentBuildings = useMemo(() => {
+    const order = ['아파트', '오피스텔', '도시형·생숙', '기타'];
+    const set = new Set(items.map((i) => buildingType(i)));
+    return order.filter((b) => set.has(b as ReturnType<typeof buildingType>));
+  }, [items]);
+
+  // 임대/분양/줍줍(카테고리) + 건물종류 체크 필터: 켜진 것만 표시.
   const visibleItems = useMemo(
     () =>
       items.filter((i) => {
         const cat = housingCategory(i);
-        return (
+        const catOn =
           (showRental && cat === '임대') ||
           (showSale && cat === '분양') ||
-          (showJupjup && cat === '줍줍')
-        );
+          (showJupjup && cat === '줍줍');
+        return catOn && !uncheckedBuildings.has(buildingType(i));
       }),
-    [items, showRental, showSale, showJupjup],
+    [items, showRental, showSale, showJupjup, uncheckedBuildings],
   );
 
   // 우선 도시 체크 필터: 설정의 priorityCities 로 체크박스를 만들고,
@@ -178,6 +186,29 @@ export function Dashboard(): React.ReactElement {
               줍줍
             </label>
           </span>
+          {presentBuildings.length > 1 && (
+            <span className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
+              <span className="text-slate-400">종류</span>
+              {presentBuildings.map((b) => (
+                <label key={b} className="flex cursor-pointer select-none items-center gap-1 text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={!uncheckedBuildings.has(b)}
+                    onChange={() =>
+                      setUncheckedBuildings((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(b)) next.delete(b);
+                        else next.add(b);
+                        return next;
+                      })
+                    }
+                    className="h-3.5 w-3.5 rounded border-slate-300"
+                  />
+                  {b}
+                </label>
+              ))}
+            </span>
+          )}
           <label className="flex cursor-pointer select-none items-center gap-1.5 text-slate-600">
             <input
               type="checkbox"

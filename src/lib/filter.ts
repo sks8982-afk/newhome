@@ -21,6 +21,27 @@ export function housingCategory(a: Announcement): HousingCategory {
   return SALE_HOUSING_TYPES.includes(a.housingType) ? '분양' : '임대';
 }
 
+// 건물 종류(물리적). 데이터로 구분 가능한 것만:
+//  - 오피스텔 / 도시형·생숙(도시형생활주택·생활숙박시설) : 청약홈이 명시.
+//  - 기타 : LH 매입·전세임대 등 물리적 종류 미상.
+//  - 아파트 : 그 외(행복주택·국민/영구/공공임대·분양·무순위·임의공급·민간임대 등).
+// (빌라·다세대·단독은 데이터에 표기가 없어 구분 불가.)
+export type BuildingType = '아파트' | '오피스텔' | '도시형·생숙' | '기타';
+
+export function buildingType(a: Announcement): BuildingType {
+  switch (a.housingType) {
+    case '오피스텔':
+      return '오피스텔';
+    case '도시형생활주택':
+    case '생활숙박시설':
+      return '도시형·생숙';
+    case '기타':
+      return '기타';
+    default:
+      return '아파트';
+  }
+}
+
 export function matchesFilter(a: Announcement, f: UserFilter): boolean {
   const typeOk =
     f.housingTypes.length === 0 || f.housingTypes.includes(a.housingType);
