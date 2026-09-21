@@ -39,8 +39,8 @@ export function NotificationBanner({ newItems, onDismiss }: Props): React.ReactE
 
   return (
     <div className="mb-6 rounded-lg border border-priority-500 bg-priority-50 p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-lg">🔔</span>
             <h2 className="text-base font-semibold text-priority-700">
@@ -52,7 +52,7 @@ export function NotificationBanner({ newItems, onDismiss }: Props): React.ReactE
               )}
             </h2>
           </div>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-800">
+          <ul className="mt-2 list-disc space-y-1 break-words pl-5 text-sm text-slate-800">
             {newItems.slice(0, 5).map((i) => (
               <li key={i.id} className={i.isPriority ? 'font-semibold' : ''}>
                 {i.isPriority && <span className="mr-1">⭐</span>}
@@ -63,12 +63,12 @@ export function NotificationBanner({ newItems, onDismiss }: Props): React.ReactE
             ))}
           </ul>
         </div>
-        <div className="flex flex-col gap-2">
+        <div className="flex shrink-0 flex-row flex-wrap gap-2 sm:flex-col">
           {browserPermission !== 'granted' && (
             <button
               type="button"
               onClick={requestPermission}
-              className="rounded-md bg-priority-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-priority-700"
+              className="whitespace-nowrap rounded-md bg-priority-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-priority-700"
             >
               브라우저 알림 허용
             </button>
@@ -76,7 +76,7 @@ export function NotificationBanner({ newItems, onDismiss }: Props): React.ReactE
           <button
             type="button"
             onClick={onDismiss}
-            className="rounded-md border border-priority-500 bg-white px-3 py-1.5 text-xs font-medium text-priority-700 hover:bg-priority-100"
+            className="whitespace-nowrap rounded-md border border-priority-500 bg-white px-3 py-1.5 text-xs font-medium text-priority-700 hover:bg-priority-100"
           >
             모두 확인
           </button>

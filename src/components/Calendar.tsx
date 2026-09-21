@@ -65,7 +65,7 @@ export function Calendar({ items }: Props): React.ReactElement {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <button
             type="button"
             className="rounded border border-slate-200 px-3 py-1 text-sm hover:bg-slate-50"
@@ -92,7 +92,7 @@ export function Calendar({ items }: Props): React.ReactElement {
         <div className="mt-1 grid grid-cols-7 gap-1">
           {cells.map((cell, idx) => {
             if (!cell) {
-              return <div key={`empty-${idx}`} className="h-24 rounded bg-slate-50" />;
+              return <div key={`empty-${idx}`} className="h-14 rounded bg-slate-50 sm:h-24" />;
             }
             const key = isoDate(cell);
             const dayItems = itemsByDate.get(key) ?? [];
@@ -101,7 +101,7 @@ export function Calendar({ items }: Props): React.ReactElement {
             const isSelected = key === selectedDate;
             const hasItems = dayItems.length > 0;
 
-            const baseClasses = `h-24 overflow-hidden rounded border p-1 text-left text-[11px] transition`;
+            const baseClasses = `h-14 sm:h-24 overflow-hidden rounded border p-1 text-left text-[11px] transition`;
             const colorClasses = hasPriority
               ? 'border-priority-500 bg-priority-50'
               : 'border-slate-200 bg-white';
@@ -133,7 +133,7 @@ export function Calendar({ items }: Props): React.ReactElement {
                     </span>
                   )}
                 </div>
-                <ul className="mt-0.5 space-y-0.5">
+                <ul className="mt-0.5 hidden space-y-0.5 sm:block">
                   {dayItems.slice(0, 2).map((i) => (
                     <li
                       key={i.id}
@@ -160,10 +160,10 @@ export function Calendar({ items }: Props): React.ReactElement {
 
       {selectedDate && (
         <div className="rounded-lg border border-slate-300 bg-slate-50 p-4">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-slate-800">
               📅 {formatKoreanDate(selectedDate)} 게시 공고 ({selectedItems.length}건)
-              <span className="ml-2 text-xs font-normal text-slate-500">
+              <span className="ml-2 hidden text-xs font-normal text-slate-500 sm:inline">
                 — 클릭하면 LH 상세 페이지로 이동
               </span>
             </h3>
@@ -178,7 +178,7 @@ export function Calendar({ items }: Props): React.ReactElement {
           {selectedItems.length === 0 ? (
             <p className="text-sm text-slate-500">이 날짜에 매칭된 공고가 없습니다.</p>
           ) : (
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {selectedItems.map((i) => (
                 <AnnouncementCard key={i.id} item={i} />
               ))}

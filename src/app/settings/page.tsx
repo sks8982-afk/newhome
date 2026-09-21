@@ -81,7 +81,7 @@ export default function SettingsPage(): React.ReactElement {
           이 정보는 서버가 아니라 <strong>이 브라우저에만</strong> 저장됩니다.<br />
           ※ 소득·자산 상한, 특별공급 자격, 정확한 1순위는 공고문 확인이 필요합니다(대략 분류).
         </p>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="text-sm text-slate-700">
             생년월일
             <input

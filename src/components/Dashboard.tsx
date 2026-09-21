@@ -156,9 +156,9 @@ export function Dashboard(): React.ReactElement {
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
           {lastRefresh && <span>마지막 수집 {lastRefresh}</span>}
-          <span className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
             <span className="text-slate-400">유형</span>
-            <label className="flex cursor-pointer select-none items-center gap-1 text-slate-700">
+            <label className="flex cursor-pointer select-none items-center gap-1 py-0.5 text-slate-700">
               <input
                 type="checkbox"
                 checked={showRental}
@@ -167,7 +167,7 @@ export function Dashboard(): React.ReactElement {
               />
               임대
             </label>
-            <label className="flex cursor-pointer select-none items-center gap-1 text-slate-700">
+            <label className="flex cursor-pointer select-none items-center gap-1 py-0.5 text-slate-700">
               <input
                 type="checkbox"
                 checked={showSale}
@@ -176,7 +176,7 @@ export function Dashboard(): React.ReactElement {
               />
               분양
             </label>
-            <label className="flex cursor-pointer select-none items-center gap-1 text-slate-700">
+            <label className="flex cursor-pointer select-none items-center gap-1 py-0.5 text-slate-700">
               <input
                 type="checkbox"
                 checked={showJupjup}
@@ -187,10 +187,10 @@ export function Dashboard(): React.ReactElement {
             </label>
           </span>
           {presentBuildings.length > 1 && (
-            <span className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
               <span className="text-slate-400">종류</span>
               {presentBuildings.map((b) => (
-                <label key={b} className="flex cursor-pointer select-none items-center gap-1 text-slate-700">
+                <label key={b} className="flex cursor-pointer select-none items-center gap-1 py-0.5 text-slate-700">
                   <input
                     type="checkbox"
                     checked={!uncheckedBuildings.has(b)}
@@ -209,7 +209,7 @@ export function Dashboard(): React.ReactElement {
               ))}
             </span>
           )}
-          <label className="flex cursor-pointer select-none items-center gap-1.5 text-slate-600">
+          <label className="flex cursor-pointer select-none items-center gap-1.5 py-0.5 text-slate-600">
             <input
               type="checkbox"
               checked={includePast}
@@ -240,7 +240,7 @@ export function Dashboard(): React.ReactElement {
       <section className="rounded-lg border border-priority-400 bg-priority-50 p-4">
         <h2 className="mb-1 text-lg font-semibold">
           🎯 내 조건 맞춤 ({matchedItems.length})
-          <span className="ml-2 text-xs font-normal text-slate-500">
+          <span className="mt-0.5 block text-xs font-normal text-slate-500 sm:ml-2 sm:mt-0 sm:inline">
             — 분양·줍줍 예산 이하 + 임대 무주택 자격(대략)
           </span>
         </h2>
@@ -256,7 +256,7 @@ export function Dashboard(): React.ReactElement {
             지금 조건에 맞는(마감 전) 공고가 없습니다. 예산을 올리거나 새로고침해 보세요.
           </p>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {matchedItems.map((i) => (
               <AnnouncementCard key={i.id} item={i} />
             ))}
@@ -300,14 +300,14 @@ export function Dashboard(): React.ReactElement {
       <section>
         <h2 className="mb-3 text-lg font-semibold">
           ⭐ 우선 지역 ({priorityItems.length})
-          <span className="ml-2 text-xs font-normal text-slate-400">— 경기 채널 알림 대상</span>
+          <span className="mt-0.5 block text-xs font-normal text-slate-400 sm:ml-2 sm:mt-0 sm:inline">— 경기 채널 알림 대상</span>
         </h2>
         {priorityItems.length === 0 ? (
           <p className="rounded-md border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
             우선 지역(수원·화성·오산) 공고가 아직 없습니다.
           </p>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {priorityItems.map((i) => (
               <AnnouncementCard key={i.id} item={i} />
             ))}
@@ -318,14 +318,14 @@ export function Dashboard(): React.ReactElement {
       <section>
         <h2 className="mb-3 text-lg font-semibold">
           🏙️ 서울 지역 ({seoulItems.length})
-          <span className="ml-2 text-xs font-normal text-slate-400">— 서울 채널 알림 대상</span>
+          <span className="mt-0.5 block text-xs font-normal text-slate-400 sm:ml-2 sm:mt-0 sm:inline">— 서울 채널 알림 대상</span>
         </h2>
         {seoulItems.length === 0 ? (
           <p className="rounded-md border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
             서울 매칭 공고가 아직 없습니다.
           </p>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {seoulItems.map((i) => (
               <AnnouncementCard key={i.id} item={i} />
             ))}
@@ -336,14 +336,14 @@ export function Dashboard(): React.ReactElement {
       <section>
         <h2 className="mb-3 text-lg font-semibold">
           📋 기타 매칭 공고 ({otherItems.length})
-          <span className="ml-2 text-xs font-normal text-slate-400">— 알림 발송 X, 사이트에만 표시</span>
+          <span className="mt-0.5 block text-xs font-normal text-slate-400 sm:ml-2 sm:mt-0 sm:inline">— 알림 발송 X, 사이트에만 표시</span>
         </h2>
         {otherItems.length === 0 ? (
           <p className="rounded-md border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
             매칭되는 공고가 없습니다.
           </p>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {otherItems.map((i) => (
               <AnnouncementCard key={i.id} item={i} />
             ))}

@@ -21,7 +21,7 @@ function range(min: number, max: number, f: (n: number) => number | string): str
 }
 
 export function AnnouncementCard({ item }: Props): React.ReactElement {
-  const base = 'rounded-lg border p-3 sm:p-4 transition hover:shadow-sm bg-white';
+  const base = 'min-w-0 rounded-lg border p-3 sm:p-4 transition hover:shadow-sm bg-white';
   const priorityCls = item.isPriority
     ? 'border-priority-500 bg-priority-50 ring-1 ring-priority-500'
     : 'border-slate-200';
@@ -140,7 +140,7 @@ export function AnnouncementCard({ item }: Props): React.ReactElement {
           카카오맵
         </a>
         {address && (
-          <span className="min-w-0 flex-1 truncate text-slate-400" title={address}>
+          <span className="line-clamp-2 w-full break-words text-slate-400 sm:line-clamp-1 sm:w-auto sm:min-w-0 sm:flex-1" title={address}>
             {address}
           </span>
         )}
