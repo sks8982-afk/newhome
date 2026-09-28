@@ -25,6 +25,8 @@ export default function SettingsPage(): React.ReactElement {
   const [saved, setSaved] = useState<boolean>(false);
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [profileSaved, setProfileSaved] = useState<boolean>(false);
+  const [icsUrl, setIcsUrl] = useState<string>('');
+  const [copied, setCopied] = useState<boolean>(false);
 
   useEffect(() => {
     fetch('/api/filter')
@@ -35,7 +37,19 @@ export default function SettingsPage(): React.ReactElement {
       })
       .catch(() => {});
     setProfile(loadProfile());
+    // 구독 주소는 배포 도메인이 달라질 수 있어 브라우저 주소 기준으로 만든다.
+    setIcsUrl(`${window.location.origin}/calendar.ics`);
   }, []);
+
+  const copyIcsUrl = (): void => {
+    navigator.clipboard
+      .writeText(icsUrl)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => setCopied(false));
+  };
 
   const saveProfileForm = (): void => {
     saveProfile(profile);
@@ -143,6 +157,40 @@ export default function SettingsPage(): React.ReactElement {
           </button>
           {profileSaved && <span className="text-sm text-priority-700">✓ 저장되었습니다</span>}
         </div>
+      </section>
+
+      <section className="rounded-lg border border-indigo-300 bg-indigo-50 p-4 sm:p-5">
+        <h3 className="mb-1 font-semibold text-slate-800">📅 캘린더 구독</h3>
+        <p className="mb-3 text-xs leading-relaxed text-slate-600">
+          아래 주소를 구글 캘린더에 <strong>최초 1회만</strong> 등록해 두면, 공고 목록에서{' '}
+          <strong>…</strong> → <strong>캘린더에 추가</strong>로 담은 공고의{' '}
+          <strong>신청일</strong>이 자동으로 들어옵니다.
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            type="text"
+            readOnly
+            value={icsUrl}
+            onFocus={(e) => e.currentTarget.select()}
+            className="w-full min-w-0 rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-xs text-slate-700 sm:text-sm"
+          />
+          <button
+            type="button"
+            onClick={copyIcsUrl}
+            className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+          >
+            {copied ? '✓ 복사됨' : '주소 복사'}
+          </button>
+        </div>
+        <ol className="mt-3 list-decimal space-y-1 pl-5 text-xs leading-relaxed text-slate-600">
+          <li>구글 캘린더 → 왼쪽 <strong>다른 캘린더 +</strong> → <strong>URL로 추가</strong></li>
+          <li>위 주소를 붙여넣고 <strong>캘린더 추가</strong></li>
+        </ol>
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+          ※ 구글은 구독 주소를 <strong>8~24시간마다</strong> 확인합니다(강제 새로고침 불가).
+          그래서 <strong>캘린더에 추가</strong>를 누르면 구글 캘린더 등록 창도 함께 열려
+          바로 넣을 수 있게 해두었습니다. 구독 주소는 다른 기기 동기화·백업용입니다.
+        </p>
       </section>
 
       <h2 className="pt-2 text-xl font-semibold">🔎 수집 필터</h2>

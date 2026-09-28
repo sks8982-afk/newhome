@@ -29,9 +29,48 @@ export function Dashboard(): React.ReactElement {
   const [uncheckedBuildings, setUncheckedBuildings] = useState<Set<string>>(new Set());
   const [uncheckedCities, setUncheckedCities] = useState<Set<string>>(new Set());
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+  // 캘린더(구독 피드)에 담은 공고 id
+  const [pickedIds, setPickedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setProfile(loadProfile());
+    fetch('/api/calendar/picks', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((rows: Array<{ announcementId: string }>) => {
+        setPickedIds(new Set(rows.map((r) => r.announcementId)));
+      })
+      .catch(() => {});
+  }, []);
+
+  // 담기/빼기 — 낙관적 갱신 후 서버 반영, 실패하면 되돌린다.
+  const togglePick = useCallback((item: Announcement, next: boolean): void => {
+    setPickedIds((prev) => {
+      const s = new Set(prev);
+      if (next) s.add(item.id);
+      else s.delete(item.id);
+      return s;
+    });
+    const req = next
+      ? fetch('/api/calendar/picks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: item.id }),
+        })
+      : fetch(`/api/calendar/picks?id=${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+    void req
+      .then((r) => {
+        if (r.ok) return;
+        throw new Error('저장 실패');
+      })
+      .catch(() => {
+        setPickedIds((prev) => {
+          const s = new Set(prev);
+          if (next) s.delete(item.id);
+          else s.add(item.id);
+          return s;
+        });
+        setError('캘린더 목록 저장에 실패했습니다.');
+      });
   }, []);
 
   const load = useCallback(async (): Promise<void> => {
@@ -123,6 +162,12 @@ export function Dashboard(): React.ReactElement {
   const matchedItems = useMemo(
     () => cityFilteredItems.filter((i) => matchesProfile(i, profile)),
     [cityFilteredItems, profile],
+  );
+
+  // 📅 캘린더에 담은 공고 — 유형/지역 필터와 무관하게 담은 건 항상 보여준다.
+  const pickedItems = useMemo(
+    () => items.filter((i) => pickedIds.has(i.id)),
+    [items, pickedIds],
   );
 
   const newItems = useMemo(() => cityFilteredItems.filter((i) => i.isNew), [cityFilteredItems]);
@@ -258,13 +303,48 @@ export function Dashboard(): React.ReactElement {
         ) : (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {matchedItems.map((i) => (
-              <AnnouncementCard key={i.id} item={i} />
+              <AnnouncementCard
+                key={i.id}
+                item={i}
+                picked={pickedIds.has(i.id)}
+                onTogglePick={togglePick}
+              />
             ))}
           </div>
         )}
         <p className="mt-2 text-xs text-slate-400">
           ※ 대략 분류입니다. 소득·자산 상한, 특별공급 자격, 정확한 1순위는 공고문을 확인하세요.
         </p>
+      </section>
+
+      <section className="rounded-lg border border-indigo-300 bg-indigo-50 p-4">
+        <h2 className="mb-1 text-lg font-semibold">
+          📅 캘린더에 담은 공고 ({pickedItems.length})
+          <span className="mt-0.5 block text-xs font-normal text-slate-500 sm:ml-2 sm:mt-0 sm:inline">
+            — 구독 주소(.ics)에 들어가는 공고
+          </span>
+        </h2>
+        {pickedItems.length === 0 ? (
+          <p className="rounded-md border border-dashed border-indigo-300 bg-white p-4 text-center text-sm text-slate-500">
+            공고 오른쪽 <strong>…</strong> 버튼 → <strong>캘린더에 추가</strong>로 담으면 여기에 모입니다.
+            <br />
+            <a href="/settings" className="font-semibold text-indigo-700 underline">
+              설정 → 📅 캘린더 구독
+            </a>
+            에서 구독 주소를 한 번만 등록해 두세요.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {pickedItems.map((i) => (
+              <AnnouncementCard
+                key={i.id}
+                item={i}
+                picked
+                onTogglePick={togglePick}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       <Calendar items={cityFilteredItems} />
@@ -309,7 +389,12 @@ export function Dashboard(): React.ReactElement {
         ) : (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {priorityItems.map((i) => (
-              <AnnouncementCard key={i.id} item={i} />
+              <AnnouncementCard
+                key={i.id}
+                item={i}
+                picked={pickedIds.has(i.id)}
+                onTogglePick={togglePick}
+              />
             ))}
           </div>
         )}
@@ -327,7 +412,12 @@ export function Dashboard(): React.ReactElement {
         ) : (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {seoulItems.map((i) => (
-              <AnnouncementCard key={i.id} item={i} />
+              <AnnouncementCard
+                key={i.id}
+                item={i}
+                picked={pickedIds.has(i.id)}
+                onTogglePick={togglePick}
+              />
             ))}
           </div>
         )}
@@ -345,7 +435,12 @@ export function Dashboard(): React.ReactElement {
         ) : (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {otherItems.map((i) => (
-              <AnnouncementCard key={i.id} item={i} />
+              <AnnouncementCard
+                key={i.id}
+                item={i}
+                picked={pickedIds.has(i.id)}
+                onTogglePick={togglePick}
+              />
             ))}
           </div>
         )}
