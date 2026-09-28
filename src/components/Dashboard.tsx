@@ -347,7 +347,7 @@ export function Dashboard(): React.ReactElement {
         )}
       </section>
 
-      <Calendar items={cityFilteredItems} />
+      <Calendar items={items} pickedIds={pickedIds} onTogglePick={togglePick} />
 
       {priorityCities.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm">

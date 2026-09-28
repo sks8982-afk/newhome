@@ -59,7 +59,7 @@ function firstDate(raw: string): string | undefined {
 
 // 신청(접수) 시작일 파서 버전. 올리면 기존 행을 한 번씩 다시 읽는다.
 // (파서를 개선했는데 scheduleTried 플래그 때문에 영영 재수집되지 않는 걸 막는다.)
-export const LH_SCHEDULE_PARSER_VERSION = 5;
+export const LH_SCHEDULE_PARSER_VERSION = 6;
 
 function normalizeDate(raw: string): string {
   // "2026.04.28" -> "2026-04-28"
@@ -218,6 +218,7 @@ interface LhDetail {
   areaMin?: number; // 전용면적 ㎡
   areaMax?: number;
   applyStart?: string; // 접수 시작일 YYYY-MM-DD
+  applyPeriodText?: string; // LH 표기 그대로의 접수기간(시각 포함) — 캘린더 설명용
 }
 
 // LH 상세페이지 파싱: 주택형 안내 표의 '전용면적(㎡)'·'평균분양가격(원)'·'금회공급세대수',
@@ -281,39 +282,51 @@ function parseLhDetail(html: string): LhDetail {
   //      $('#sta_acpDt').text(sbscAcpStDt + ...) 형태라 그 변수를 직접 읽는다.
   //      (스크래퍼는 JS 를 실행하지 않으므로 라벨만 보면 값이 없다고 오판한다.)
   //  (D) 분양·잔여세대 표 / 인라인 JSON.
-  out.applyStart =
-    firstDate($('#sta_acpDt').text()) ??
-    firstDate(html.match(/var\s+sbscAcpStDt\s*=\s*["']([^"']+)["']/)?.[1] ?? '') ??
-    parseScheduleTable($) ??
-    parseJsonSchedule(html);
+  const schedule =
+    scheduleFromLabel($) ??
+    scheduleFromJsVars(html) ??
+    scheduleFromTable($) ??
+    scheduleFromJson(html);
+  out.applyStart = schedule?.start;
+  out.applyPeriodText = schedule?.text;
 
   return out;
 }
 
-const MONTHS: Record<string, string> = {
-  Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
-  Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12',
-};
-
-// (C)(D) goSbsc() 인라인 JSON 의 접수 시작일시 중 가장 이른 값.
-//  - acpStBttm 계열(매입임대): 자바 Date 포맷 "Sep 28, 2026 10:00:00 AM"
-//  - ustAcpStDttm(수시모집 전세임대 등): "2026-03-24 10:00"
-function parseJsonSchedule(html: string): string | undefined {
-  const dates: string[] = [];
-  for (const m of html.matchAll(/"acpStDttm"\s*:\s*"([A-Z][a-z]{2}) (\d{1,2}), (\d{4})/g)) {
-    const mon = MONTHS[m[1]];
-    if (mon) dates.push(`${m[3]}-${mon}-${m[2].padStart(2, '0')}`);
-  }
-  for (const m of html.matchAll(/"ustAcpStDttm"\s*:\s*"([^"]+)"/g)) {
-    const d = firstDate(m[1]);
-    if (d) dates.push(d);
-  }
-  return dates.length > 0 ? dates.sort()[0] : undefined;
+// 접수 시작일 + LH 표기 원문(시각 포함). 원문은 캘린더 일정 설명에 쓴다.
+interface ScheduleHit {
+  start: string;
+  text?: string;
 }
 
-// (B) '신청일시' 열을 가진 공급일정 표에서 가장 이른 신청 시작일.
-function parseScheduleTable($: cheerio.CheerioAPI): string | undefined {
-  const starts: string[] = [];
+// (A) 임대 표준 — <li>접수기간 : <label id="sta_acpDt">2026.10.12 ~ 2026.10.13</label></li>
+function scheduleFromLabel($: cheerio.CheerioAPI): ScheduleHit | undefined {
+  const raw = $('#sta_acpDt').text().replace(/\s+/g, ' ').trim();
+  const start = firstDate(raw);
+  return start ? { start, text: raw } : undefined;
+}
+
+// (B) 매입임대 등 — 라벨이 원본 HTML 에서는 비어 있고 JS 가 채운다.
+//     $('#sta_acpDt').text(sbscAcpStDt + " " + sbscAcpStHm + " ~ " + ...) 형태라
+//     그 변수를 직접 읽는다. 스크래퍼는 JS 를 실행하지 않아 라벨만 보면 오판한다.
+function scheduleFromJsVars(html: string): ScheduleHit | undefined {
+  const v = (name: string): string =>
+    html.match(new RegExp(`var\s+${name}\s*=\s*["']([^"']*)["']`))?.[1]?.trim() ?? '';
+  const stDt = v('sbscAcpStDt');
+  const start = firstDate(stDt);
+  if (!start) return undefined;
+  const stHm = v('sbscAcpStHm');
+  const clsgDt = v('sbscAcpClsgDt');
+  const clsgHm = v('sbscAcpClsgHm');
+  const left = [stDt, stHm].filter(Boolean).join(' ');
+  const right = [clsgDt, clsgHm].filter(Boolean).join(' ');
+  return { start, text: right ? `${left} ~ ${right}` : left };
+}
+
+// (C) 분양·잔여세대 — '구분/신청일시/신청방법' 표.
+//     순위·자격별로 행이 여러 개라 가장 이른 시작일을 쓴다.
+function scheduleFromTable($: cheerio.CheerioAPI): ScheduleHit | undefined {
+  const hits: ScheduleHit[] = [];
   $('table').each((_, tbl) => {
     const headers = $(tbl)
       .find('thead th')
@@ -326,12 +339,40 @@ function parseScheduleTable($: cheerio.CheerioAPI): string | undefined {
       .each((__, tr) => {
         const cells = $(tr).find('td');
         if (cells.length <= idx) return;
-        const d = firstDate($(cells[idx]).text());
-        if (d) starts.push(d);
+        const raw = $(cells[idx]).text().replace(/\s+/g, ' ').trim();
+        const start = firstDate(raw);
+        if (start) hits.push({ start, text: raw });
       });
   });
-  return starts.length > 0 ? starts.sort()[0] : undefined;
+  if (hits.length === 0) return undefined;
+  return hits.sort((a, b) => a.start.localeCompare(b.start))[0];
 }
+
+// (D)(E) goSbsc() 인라인 JSON.
+//  - acpStDttm(매입임대 공급목록): 자바 Date 포맷 "Sep 28, 2026 10:00:00 AM"
+//  - ustAcpStDttm(수시모집 전세임대 등): "2026-03-24 10:00"
+function scheduleFromJson(html: string): ScheduleHit | undefined {
+  const hits: ScheduleHit[] = [];
+  for (const m of html.matchAll(/"acpStDttm"\s*:\s*"([A-Z][a-z]{2}) (\d{1,2}), (\d{4})/g)) {
+    const mon = MONTHS[m[1]];
+    if (mon) hits.push({ start: `${m[3]}-${mon}-${m[2].padStart(2, '0')}` });
+  }
+  const ustSt = [...html.matchAll(/"ustAcpStDttm"\s*:\s*"([^"]+)"/g)][0]?.[1];
+  const ustEnd = [...html.matchAll(/"ustAcpClsgDttm"\s*:\s*"([^"]+)"/g)][0]?.[1];
+  if (ustSt) {
+    const start = firstDate(ustSt);
+    if (start) hits.push({ start, text: ustEnd ? `${ustSt} ~ ${ustEnd}` : ustSt });
+  }
+  if (hits.length === 0) return undefined;
+  return hits.sort((a, b) => a.start.localeCompare(b.start))[0];
+}
+
+const MONTHS: Record<string, string> = {
+  Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+  Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12',
+};
+
+
 
 // LH 항목을 상세페이지에서 전용면적·세대수·주소(+분양이면 금액)로 보강.
 // 임대·분양 모두 대상(임대는 분양가만 없음). 증분 보강 파이프라인에서 호출.
@@ -354,6 +395,7 @@ export async function enrichLhItems(items: Announcement[]): Promise<Announcement
       // 공고(수시모집 등)를 매번 다시 받지 않도록 한다. 파서 버전으로 남겨
       // 파서가 개선되면(버전 상승) 자동으로 한 번 더 읽는다.
       raw.scheduleTried = LH_SCHEDULE_PARSER_VERSION;
+      if (d.applyPeriodText) raw.applyPeriod = d.applyPeriodText;
       enriched.set(a.id, { ...a, applyStart: d.applyStart ?? a.applyStart, raw });
     } catch {
       /* 상세 파싱 실패 시 금액/주소 없이 표시 */
