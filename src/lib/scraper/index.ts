@@ -1,5 +1,5 @@
 import type { Announcement } from '@/types/announcement';
-import { scrapeLH, enrichLhItems } from './lh';
+import { scrapeLH, enrichLhItems, LH_SCHEDULE_PARSER_VERSION } from './lh';
 import { scrapeChungyak } from './chungyak';
 import {
   loadAnnouncements,
@@ -29,7 +29,11 @@ async function enrichMissingLhDetails(): Promise<void> {
         a.raw?.enrichTried === undefined;
       // 신청일 미보강분 — 상세에만 있는 값이라 별도 플래그로 추적한다.
       // (이미 주소/면적이 채워진 기존 행도 신청일 때문에 한 번은 다시 읽어야 함)
-      const needSchedule = a.applyStart === undefined && a.raw?.scheduleTried === undefined;
+      // 파서 버전이 올라갔으면 이미 시도한 행도 다시 읽는다.
+      const tried = a.raw?.scheduleTried;
+      const needSchedule =
+        a.applyStart === undefined &&
+        (typeof tried !== 'number' || tried < LH_SCHEDULE_PARSER_VERSION);
       return needDetail || needSchedule;
     })
     .slice(0, ENRICH_MAX);

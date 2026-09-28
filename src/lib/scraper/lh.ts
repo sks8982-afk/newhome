@@ -49,6 +49,18 @@ function detectHousingType(typeText: string, title: string): HousingType {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+// "2026.10.12 ~ 2026.10.13", "2026.09.29 09:00 ~ ..." 등에서 앞쪽 날짜만 뽑는다.
+function firstDate(raw: string): string | undefined {
+  const m = raw.match(/(\d{4})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})/);
+  if (!m) return undefined;
+  const iso = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  return ISO_DATE.test(iso) ? iso : undefined;
+}
+
+// 신청(접수) 시작일 파서 버전. 올리면 기존 행을 한 번씩 다시 읽는다.
+// (파서를 개선했는데 scheduleTried 플래그 때문에 영영 재수집되지 않는 걸 막는다.)
+export const LH_SCHEDULE_PARSER_VERSION = 2;
+
 function normalizeDate(raw: string): string {
   // "2026.04.28" -> "2026-04-28"
   const trimmed = raw.trim().replace(/\s+/g, '');
@@ -260,15 +272,36 @@ function parseLhDetail(html: string): LhDetail {
   }
 
   // 신청(접수) 시작일: 목록에는 마감일만 있고 상세 '공급일정'에만 있다.
-  //   <li>접수기간 : <label id="sta_acpDt"> 2026.10.12 ~ 2026.10.13 </label></li>
-  // 수시모집(전세임대)·매입임대처럼 LH가 값을 비워둔 공고도 있어 그 경우 미설정.
-  const acceptPeriod = $('#sta_acpDt').text().trim();
-  if (acceptPeriod) {
-    const start = normalizeDate(acceptPeriod.split('~')[0] ?? '');
-    if (ISO_DATE.test(start)) out.applyStart = start;
-  }
+  // 공급일정 섹션은 두 가지 형태로 나온다.
+  //  (A) 임대 표준 — <li>접수기간 : <label id="sta_acpDt">2026.10.12 ~ 2026.10.13</label></li>
+  //  (B) 분양·잔여세대 — sta_acpDt 가 없고 '구분/신청일시/신청방법' 표로 나온다.
+  //      순위·자격별로 행이 여러 개라 가장 이른 시작일을 쓴다.
+  // 수시모집(전세임대)·매입임대처럼 LH가 어느 쪽에도 안 채운 공고는 미설정.
+  out.applyStart = firstDate($('#sta_acpDt').text()) ?? parseScheduleTable($);
 
   return out;
+}
+
+// (B) '신청일시' 열을 가진 공급일정 표에서 가장 이른 신청 시작일.
+function parseScheduleTable($: cheerio.CheerioAPI): string | undefined {
+  const starts: string[] = [];
+  $('table').each((_, tbl) => {
+    const headers = $(tbl)
+      .find('thead th')
+      .map((__, th) => $(th).text().replace(/\s+/g, ''))
+      .get();
+    const idx = headers.findIndex((h) => h.includes('신청일시'));
+    if (idx < 0) return;
+    $(tbl)
+      .find('tbody tr')
+      .each((__, tr) => {
+        const cells = $(tr).find('td');
+        if (cells.length <= idx) return;
+        const d = firstDate($(cells[idx]).text());
+        if (d) starts.push(d);
+      });
+  });
+  return starts.length > 0 ? starts.sort()[0] : undefined;
 }
 
 // LH 항목을 상세페이지에서 전용면적·세대수·주소(+분양이면 금액)로 보강.
@@ -289,8 +322,9 @@ export async function enrichLhItems(items: Announcement[]): Promise<Announcement
       if (d.units !== undefined) raw.units = d.units;
       if (d.address) raw.address = d.address;
       // 상세를 실제로 읽었으므로 일정 조회는 완료 표시 — 접수기간이 비어 있는
-      // 공고(수시모집 등)를 매번 다시 받지 않도록 한다.
-      raw.scheduleTried = true;
+      // 공고(수시모집 등)를 매번 다시 받지 않도록 한다. 파서 버전으로 남겨
+      // 파서가 개선되면(버전 상승) 자동으로 한 번 더 읽는다.
+      raw.scheduleTried = LH_SCHEDULE_PARSER_VERSION;
       enriched.set(a.id, { ...a, applyStart: d.applyStart ?? a.applyStart, raw });
     } catch {
       /* 상세 파싱 실패 시 금액/주소 없이 표시 */
