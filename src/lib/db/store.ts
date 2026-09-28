@@ -153,3 +153,40 @@ export async function getUnnotifiedNewItems(): Promise<Announcement[]> {
     fetchedAt: r.fetchedAt.toISOString(),
   }));
 }
+
+// ── 캘린더 담기(구독 피드에 포함할 공고) ───────────────────────────────
+// 이 앱은 인증이 없어 전역 단일 목록이다(Filter id=1 과 같은 성격).
+
+export interface CalendarPickRow {
+  announcementId: string;
+  manualStart?: string;
+  manualEnd?: string;
+}
+
+export async function loadCalendarPicks(): Promise<CalendarPickRow[]> {
+  const rows = await prisma.calendarPick.findMany({ orderBy: { addedAt: 'desc' } });
+  return rows.map((r) => ({
+    announcementId: r.announcementId,
+    manualStart: r.manualStart ?? undefined,
+    manualEnd: r.manualEnd ?? undefined,
+  }));
+}
+
+export async function addCalendarPick(
+  announcementId: string,
+  manual?: { start?: string; end?: string },
+): Promise<void> {
+  const data = {
+    manualStart: manual?.start ?? null,
+    manualEnd: manual?.end ?? null,
+  };
+  await prisma.calendarPick.upsert({
+    where: { announcementId },
+    update: data,
+    create: { announcementId, ...data },
+  });
+}
+
+export async function removeCalendarPick(announcementId: string): Promise<void> {
+  await prisma.calendarPick.deleteMany({ where: { announcementId } });
+}

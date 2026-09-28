@@ -59,7 +59,7 @@ function firstDate(raw: string): string | undefined {
 
 // 신청(접수) 시작일 파서 버전. 올리면 기존 행을 한 번씩 다시 읽는다.
 // (파서를 개선했는데 scheduleTried 플래그 때문에 영영 재수집되지 않는 걸 막는다.)
-export const LH_SCHEDULE_PARSER_VERSION = 2;
+export const LH_SCHEDULE_PARSER_VERSION = 5;
 
 function normalizeDate(raw: string): string {
   // "2026.04.28" -> "2026-04-28"
@@ -277,9 +277,38 @@ function parseLhDetail(html: string): LhDetail {
   //  (B) 분양·잔여세대 — sta_acpDt 가 없고 '구분/신청일시/신청방법' 표로 나온다.
   //      순위·자격별로 행이 여러 개라 가장 이른 시작일을 쓴다.
   // 수시모집(전세임대)·매입임대처럼 LH가 어느 쪽에도 안 채운 공고는 미설정.
-  out.applyStart = firstDate($('#sta_acpDt').text()) ?? parseScheduleTable($);
+  //  (C) 매입임대 등 — sta_acpDt 라벨이 원본 HTML 에서는 비어 있고 JS 가 채운다.
+  //      $('#sta_acpDt').text(sbscAcpStDt + ...) 형태라 그 변수를 직접 읽는다.
+  //      (스크래퍼는 JS 를 실행하지 않으므로 라벨만 보면 값이 없다고 오판한다.)
+  //  (D) 분양·잔여세대 표 / 인라인 JSON.
+  out.applyStart =
+    firstDate($('#sta_acpDt').text()) ??
+    firstDate(html.match(/var\s+sbscAcpStDt\s*=\s*["']([^"']+)["']/)?.[1] ?? '') ??
+    parseScheduleTable($) ??
+    parseJsonSchedule(html);
 
   return out;
+}
+
+const MONTHS: Record<string, string> = {
+  Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+  Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12',
+};
+
+// (C)(D) goSbsc() 인라인 JSON 의 접수 시작일시 중 가장 이른 값.
+//  - acpStBttm 계열(매입임대): 자바 Date 포맷 "Sep 28, 2026 10:00:00 AM"
+//  - ustAcpStDttm(수시모집 전세임대 등): "2026-03-24 10:00"
+function parseJsonSchedule(html: string): string | undefined {
+  const dates: string[] = [];
+  for (const m of html.matchAll(/"acpStDttm"\s*:\s*"([A-Z][a-z]{2}) (\d{1,2}), (\d{4})/g)) {
+    const mon = MONTHS[m[1]];
+    if (mon) dates.push(`${m[3]}-${mon}-${m[2].padStart(2, '0')}`);
+  }
+  for (const m of html.matchAll(/"ustAcpStDttm"\s*:\s*"([^"]+)"/g)) {
+    const d = firstDate(m[1]);
+    if (d) dates.push(d);
+  }
+  return dates.length > 0 ? dates.sort()[0] : undefined;
 }
 
 // (B) '신청일시' 열을 가진 공급일정 표에서 가장 이른 신청 시작일.
