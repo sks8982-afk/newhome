@@ -18,15 +18,20 @@ async function enrichMissingLhDetails(): Promise<void> {
   const cutoff = monthsAgoKST(3);
   const stored = await loadAnnouncements();
   const need = stored
-    .filter(
-      (a) =>
-        a.source === 'LH' &&
+    .filter((a) => {
+      if (a.source !== 'LH') return false;
+      if (a.applyEnd !== undefined && a.applyEnd < cutoff) return false;
+      // 전용면적·금액·주소 미보강분 (한 번 시도한 건 재시도 안 함)
+      const needDetail =
         a.raw?.areaMin === undefined &&
         a.raw?.address === undefined &&
         a.raw?.priceMin === undefined &&
-        a.raw?.enrichTried === undefined && // 이미 시도한 건 재시도 안 함
-        (a.applyEnd === undefined || a.applyEnd >= cutoff),
-    )
+        a.raw?.enrichTried === undefined;
+      // 신청일 미보강분 — 상세에만 있는 값이라 별도 플래그로 추적한다.
+      // (이미 주소/면적이 채워진 기존 행도 신청일 때문에 한 번은 다시 읽어야 함)
+      const needSchedule = a.applyStart === undefined && a.raw?.scheduleTried === undefined;
+      return needDetail || needSchedule;
+    })
     .slice(0, ENRICH_MAX);
   if (need.length === 0) return;
   const enriched = await enrichLhItems(need);

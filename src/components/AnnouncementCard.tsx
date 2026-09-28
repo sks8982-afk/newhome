@@ -118,6 +118,9 @@ export function AnnouncementCard({ item }: Props): React.ReactElement {
 
       <p className="mt-1 text-xs text-slate-500">
         게시 {item.postedAt || '-'}
+        {item.applyStart && (
+          <span className="font-semibold text-blue-700"> · 신청 {item.applyStart}</span>
+        )}
         {item.applyEnd && ` · 마감 ${item.applyEnd}`}
       </p>
 

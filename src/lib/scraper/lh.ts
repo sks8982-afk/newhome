@@ -47,6 +47,8 @@ function detectHousingType(typeText: string, title: string): HousingType {
   return '기타';
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 function normalizeDate(raw: string): string {
   // "2026.04.28" -> "2026-04-28"
   const trimmed = raw.trim().replace(/\s+/g, '');
@@ -203,6 +205,7 @@ interface LhDetail {
   address?: string;
   areaMin?: number; // 전용면적 ㎡
   areaMax?: number;
+  applyStart?: string; // 접수 시작일 YYYY-MM-DD
 }
 
 // LH 상세페이지 파싱: 주택형 안내 표의 '전용면적(㎡)'·'평균분양가격(원)'·'금회공급세대수',
@@ -256,6 +259,15 @@ function parseLhDetail(html: string): LhDetail {
     if (li && li.length <= 120) out.address = li;
   }
 
+  // 신청(접수) 시작일: 목록에는 마감일만 있고 상세 '공급일정'에만 있다.
+  //   <li>접수기간 : <label id="sta_acpDt"> 2026.10.12 ~ 2026.10.13 </label></li>
+  // 수시모집(전세임대)·매입임대처럼 LH가 값을 비워둔 공고도 있어 그 경우 미설정.
+  const acceptPeriod = $('#sta_acpDt').text().trim();
+  if (acceptPeriod) {
+    const start = normalizeDate(acceptPeriod.split('~')[0] ?? '');
+    if (ISO_DATE.test(start)) out.applyStart = start;
+  }
+
   return out;
 }
 
@@ -276,7 +288,10 @@ export async function enrichLhItems(items: Announcement[]): Promise<Announcement
       if (d.areaMin !== undefined) { raw.areaMin = d.areaMin; raw.areaMax = d.areaMax; }
       if (d.units !== undefined) raw.units = d.units;
       if (d.address) raw.address = d.address;
-      if (Object.keys(raw).length > 0) enriched.set(a.id, { ...a, raw });
+      // 상세를 실제로 읽었으므로 일정 조회는 완료 표시 — 접수기간이 비어 있는
+      // 공고(수시모집 등)를 매번 다시 받지 않도록 한다.
+      raw.scheduleTried = true;
+      enriched.set(a.id, { ...a, applyStart: d.applyStart ?? a.applyStart, raw });
     } catch {
       /* 상세 파싱 실패 시 금액/주소 없이 표시 */
     }

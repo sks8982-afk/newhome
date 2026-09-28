@@ -43,7 +43,9 @@ export async function upsertAnnouncements(items: Announcement[]): Promise<void> 
         region: a.region,
         city: a.city ?? null,
         postedAt: a.postedAt,
-        applyStart: a.applyStart ?? null,
+        // 신청일은 LH 목록에 없고 상세보강으로만 채워진다. raw 와 같은 이유로
+        // 값이 있을 때만 갱신 — 목록 기반 재수집이 보강 결과를 지우지 않게.
+        ...(a.applyStart ? { applyStart: a.applyStart } : {}),
         applyEnd: a.applyEnd ?? null,
         status: a.status ?? null,
         detailUrl: a.detailUrl,
