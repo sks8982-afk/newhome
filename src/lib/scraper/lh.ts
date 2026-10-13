@@ -59,7 +59,7 @@ function firstDate(raw: string): string | undefined {
 
 // 신청(접수) 시작일 파서 버전. 올리면 기존 행을 한 번씩 다시 읽는다.
 // (파서를 개선했는데 scheduleTried 플래그 때문에 영영 재수집되지 않는 걸 막는다.)
-export const LH_SCHEDULE_PARSER_VERSION = 6;
+export const LH_SCHEDULE_PARSER_VERSION = 7;
 
 function normalizeDate(raw: string): string {
   // "2026.04.28" -> "2026-04-28"
@@ -310,14 +310,15 @@ function scheduleFromLabel($: cheerio.CheerioAPI): ScheduleHit | undefined {
 //     $('#sta_acpDt').text(sbscAcpStDt + " " + sbscAcpStHm + " ~ " + ...) 형태라
 //     그 변수를 직접 읽는다. 스크래퍼는 JS 를 실행하지 않아 라벨만 보면 오판한다.
 function scheduleFromJsVars(html: string): ScheduleHit | undefined {
-  const v = (name: string): string =>
-    html.match(new RegExp(`var\s+${name}\s*=\s*["']([^"']*)["']`))?.[1]?.trim() ?? '';
-  const stDt = v('sbscAcpStDt');
+  // 정규식 리터럴로 둔다 — 템플릿 리터럴 안에서는 \s 가 유효한 이스케이프가 아니라
+  // 그냥 s 로 붕괴해 패턴이 조용히 깨진다(new RegExp(`var\s+...`) → /vars+.../).
+  const v = (re: RegExp): string => html.match(re)?.[1]?.trim() ?? '';
+  const stDt = v(/var\s+sbscAcpStDt\s*=\s*["']([^"']*)["']/);
   const start = firstDate(stDt);
   if (!start) return undefined;
-  const stHm = v('sbscAcpStHm');
-  const clsgDt = v('sbscAcpClsgDt');
-  const clsgHm = v('sbscAcpClsgHm');
+  const stHm = v(/var\s+sbscAcpStHm\s*=\s*["']([^"']*)["']/);
+  const clsgDt = v(/var\s+sbscAcpClsgDt\s*=\s*["']([^"']*)["']/);
+  const clsgHm = v(/var\s+sbscAcpClsgHm\s*=\s*["']([^"']*)["']/);
   const left = [stDt, stHm].filter(Boolean).join(' ');
   const right = [clsgDt, clsgHm].filter(Boolean).join(' ');
   return { start, text: right ? `${left} ~ ${right}` : left };
